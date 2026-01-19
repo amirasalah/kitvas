@@ -28,7 +28,7 @@
 
 ### 1.1 One-Liner
 
-**"The collective intelligence platform for food content creators — where every search makes the system smarter."**
+**"The intelligence platform for food content creators"**
 
 ### 1.2 Vision Statement
 
