@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String   @id @default(cuid())
+  email                 String   @unique
+  subscription          String   @default("free") // 'free' | 'pro'
+  createdAt             DateTime @default(now())
+  searchCountThisWeek   Int      @default(0)
+  correctionsCount      Int      @default(0)
+  
+  searches              Search[]
+  corrections           Correction[]
+  trackedOpportunities  TrackedOpportunity[]
+  outcomes              Outcome[]
+  
+  @@index([email])
+}
+
+model Video {
+  id          String   @id @default(cuid())
+  youtubeId   String   @unique
+  title       String
+  description String?
+  thumbnailUrl String
+  publishedAt DateTime
+  views       Int?
+  extractedAt  DateTime?
+  
+  videoIngredients VideoIngredient[]
+  corrections      Correction[]
+  
+  @@index([youtubeId])
+  @@index([publishedAt])
+  // Full-text search index will be added via SQL migration
+}
+
+model Ingredient {
+  id        String   @id @default(cuid())
+  name      String   @unique // normalized name (e.g., "tomato")
+  synonyms  String[] // ["tomatoes", "tomatoe"]
+  createdAt DateTime @default(now())
+  
+  videoIngredients VideoIngredient[]
+  corrections      Correction[]
+  
+  @@index([name])
+}
+
+model VideoIngredient {
+  videoId        String
+  ingredientId   String
+  confidence     Float    // 0-1
+  source         String   // 'title' | 'description' | 'transcript'
+  correctionsCount Int    @default(0)
+  
+  video       Video      @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  ingredient  Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  
+  @@id([videoId, ingredientId])
+  @@index([ingredientId, videoId])
+  @@index([videoId])
+}
+
+model Search {
+  id         String   @id @default(cuid())
+  userId     String?
+  ingredients String[] // searched ingredients
+  createdAt  DateTime @default(now())
+  
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([userId, createdAt])
+}
+
+model Correction {
+  id           String   @id @default(cuid())
+  userId       String
+  videoId      String
+  ingredientId String
+  action       String   // 'wrong' | 'right' | 'add' | 'rename'
+  suggestedName String?
+  createdAt    DateTime @default(now())
+  
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video      Video      @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  
+  @@index([videoId, ingredientId])
+  @@index([userId])
+}
+
+model TrackedOpportunity {
+  id              String   @id @default(cuid())
+  userId          String
+  ingredients     String[]
+  status          String   // 'researching' | 'filming' | 'published' | 'abandoned'
+  opportunityScore String // 'high' | 'medium' | 'low'
+  trackedAt       DateTime @default(now())
+  
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outcomes Outcome[]
+  
+  @@index([userId, status])
+}
+
+model Outcome {
+  id                  String   @id @default(cuid())
+  trackedOpportunityId String
+  userId              String
+  videoUrl            String?
+  views7day           Int?
+  rating              Int?     // 1-5
+  reportedAt          DateTime @default(now())
+  
+  trackedOpportunity TrackedOpportunity @relation(fields: [trackedOpportunityId], references: [id], onDelete: Cascade)
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([trackedOpportunityId])
+  @@index([userId])
+}
