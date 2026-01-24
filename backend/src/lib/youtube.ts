@@ -55,7 +55,7 @@ export async function searchYouTubeVideos(
     throw new Error(`YouTube API error: ${response.statusText} - ${JSON.stringify(errorData)}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as { items: YouTubeSearchResult[] };
   return data.items || [];
 }
 
@@ -74,6 +74,34 @@ export async function getVideoDetails(
     throw new Error(`YouTube API error: ${response.statusText}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as { items: YouTubeVideo[] };
   return data.items || [];
+}
+
+/**
+ * Get YouTube autocomplete suggestions
+ * This helps discover what people are actually searching for
+ * Note: This uses the unofficial autocomplete endpoint
+ */
+export async function getYouTubeAutocomplete(
+  query: string,
+  maxResults: number = 10
+): Promise<string[]> {
+  try {
+    // YouTube autocomplete endpoint (unofficial but widely used)
+    const url = `https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&q=${encodeURIComponent(query)}`;
+    
+    const response = await fetch(url);
+    if (!response.ok) {
+      return [];
+    }
+    
+    const data = await response.json() as [string, string[]];
+    const suggestions = data[1] || [];
+    
+    return suggestions.slice(0, maxResults);
+  } catch (error) {
+    console.warn(`Failed to fetch autocomplete for "${query}":`, error);
+    return [];
+  }
 }

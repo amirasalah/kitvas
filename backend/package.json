@@ -12,7 +12,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "ingest:videos": "tsx src/scripts/ingest-videos.ts"
+    "ingest:videos": "tsx src/scripts/ingest-videos.ts",
+    "batch:daily": "tsx src/scripts/daily-batch-job.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.12.0",

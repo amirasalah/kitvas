@@ -4,7 +4,7 @@
 
 - Node.js 20 or higher
 - PostgreSQL database (Supabase)
-- npm or yarn
+- npm
 
 ## Initial Setup
 
@@ -18,15 +18,16 @@ This will install dependencies for all workspaces (frontend, backend, shared).
 
 ### 2. Set Up Database
 
-1. Create a PostgreSQL database (via Supabase or local PostgreSQL)
+1. Create a PostgreSQL database (via Supabase)
 2. Copy `.env.example` files to `.env` in each workspace:
    - `backend/.env` - Database URL and API keys
    - `frontend/.env.local` - Backend API URL
 
-3. Update `backend/.env` with your database URL:
-   ```
-   DATABASE_URL="postgresql://user:password@localhost:5432/kitvas"
-   ```
+3. Update `backend/.env` with your database URL.
+   - **Supabase:** Use the **direct** connection (port **5432**) for `db:push` and migrations.  
+     The pooler (port 6543) does not support DDL—tables will not be created.  
+     In Dashboard → Project Settings → Database, use the **URI** under "Connection string"  
+     and ensure the host uses port **5432** (e.g. `...pooler.supabase.com:5432/postgres`).
 
 4. Generate Prisma client and run migrations:
    ```bash
@@ -149,6 +150,9 @@ Once you've ingested some videos:
 - Extract ingredients from videos (Week 2 task)
 
 ## Troubleshooting
+
+### Supabase: 0 tables after `db:push`
+If `prisma db push` completes but Table Editor shows 0 tables, you are likely using the **pooler** (port 6543). Use the **direct** connection (port **5432**) in `DATABASE_URL` when running migrations. Change the host from `...:6543` to `...:5432`, run `npm run db:push` again, then check Table Editor.
 
 ### Database Connection Issues
 - Verify DATABASE_URL is correct

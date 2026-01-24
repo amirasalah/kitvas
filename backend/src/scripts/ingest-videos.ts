@@ -2,16 +2,40 @@
  * Video Ingestion Script
  * 
  * This script fetches videos from YouTube API and stores them in the database.
- * Run with: npm run ingest:videos
+ * It uses intelligent ingredient-based query generation aligned with Kitvas's
+ * ingredient-level intelligence strategy.
  * 
  * Usage:
- *   npm run ingest:videos -- --query "miso pasta recipe" --max 50
- *   npm run ingest:videos -- --queries "miso pasta,gochujang chicken,air fryer tofu"
+ *   # Use intelligent query generation (default)
+ *   npm run ingest:videos
+ *   
+ *   # Use intelligent generation with options
+ *   npm run ingest:videos -- --intelligent --max 30
+ *   
+ *   # Manual queries (backward compatible)
+ *   npm run ingest:videos -- --query "miso pasta" --max 50
+ *   npm run ingest:videos -- --queries "miso pasta,gochujang chicken"
+ *   
+ *   # Find gap opportunities (high demand, low supply)
+ *   npm run ingest:videos -- --gaps
+ * 
+ * Intelligent Query Generation Strategies:
+ *   - Popular ingredient combinations (curated list)
+ *   - Search patterns from database (user behavior)
+ *   - Ingredient co-occurrence (what appears together in videos)
+ *   - YouTube autocomplete (demand signals)
+ *   - Gap opportunities (high search, low video coverage)
  */
 
 import { config } from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { searchYouTubeVideos, getVideoDetails } from '../lib/youtube.js';
+import {
+  generateIntelligentQueries,
+  findGapOpportunities,
+  QueryGenerationOptions,
+} from '../lib/query-generator.js';
+import { processVideoIngredients } from '../lib/ingredient-extractor.js';
 
 // Load environment variables from .env file
 config();
@@ -30,17 +54,22 @@ interface IngestionOptions {
   queries: string[];
   maxResultsPerQuery: number;
   apiKey: string;
+  useIntelligentGeneration?: boolean;
+  findGaps?: boolean;
+  queryOptions?: QueryGenerationOptions;
 }
 
 async function ingestVideos(options: IngestionOptions) {
   const { queries, maxResultsPerQuery, apiKey } = options;
   
-  console.log(`🚀 Starting video ingestion for ${queries.length} search queries...`);
+  console.log(`🚀 Starting batch video ingestion for ${queries.length} search queries...`);
   console.log(`   Max results per query: ${maxResultsPerQuery}`);
+  console.log(`   Ingredients will be extracted immediately after fetching\n`);
   
   let totalIngested = 0;
   let totalSkipped = 0;
   let totalErrors = 0;
+  let totalIngredientsExtracted = 0;
 
   for (const query of queries) {
     console.log(`\n📺 Searching for: "${query}"`);
@@ -87,7 +116,7 @@ async function ingestVideos(options: IngestionOptions) {
           const statistics = video.statistics;
           
           // Store video
-          await prisma.video.create({
+          const storedVideo = await prisma.video.create({
             data: {
               youtubeId,
               title: snippet.title,
@@ -99,8 +128,22 @@ async function ingestVideos(options: IngestionOptions) {
             },
           });
 
+          // Extract ingredients immediately (pre-crawl strategy)
+          const ingredientCount = await processVideoIngredients(
+            prisma,
+            storedVideo.id,
+            snippet.title,
+            snippet.description || null
+          );
+
           totalIngested++;
-          console.log(`   ✅ Stored: "${snippet.title.substring(0, 50)}..."`);
+          totalIngredientsExtracted += ingredientCount;
+          
+          if (ingredientCount > 0) {
+            console.log(`   ✅ Stored + extracted ${ingredientCount} ingredients: "${snippet.title.substring(0, 50)}..."`);
+          } else {
+            console.log(`   ✅ Stored (no ingredients found): "${snippet.title.substring(0, 50)}..."`);
+          }
           
           // Rate limiting: YouTube API has quotas
           // Wait 100ms between videos to avoid hitting rate limits
@@ -128,22 +171,37 @@ async function ingestVideos(options: IngestionOptions) {
     }
   }
 
-  console.log(`\n✨ Ingestion complete!`);
+  console.log(`\n✨ Batch ingestion complete!`);
   console.log(`   ✅ Ingested: ${totalIngested} videos`);
+  console.log(`   🧪 Ingredients extracted: ${totalIngredientsExtracted} total`);
   console.log(`   ⏭️  Skipped (already exist): ${totalSkipped} videos`);
   console.log(`   ❌ Errors: ${totalErrors}`);
   
   // Show summary
   const totalVideos = await prisma.video.count();
-  console.log(`\n📊 Total videos in database: ${totalVideos}`);
+  const videosWithIngredients = await prisma.video.count({
+    where: {
+      videoIngredients: {
+        some: {},
+      },
+    },
+  });
+  const totalIngredients = await prisma.ingredient.count();
+  
+  console.log(`\n📊 Database Summary:`);
+  console.log(`   Total videos: ${totalVideos}`);
+  console.log(`   Videos with ingredients: ${videosWithIngredients}`);
+  console.log(`   Total unique ingredients: ${totalIngredients}`);
 }
 
 // Parse command line arguments
-function parseArgs(): IngestionOptions {
+async function parseArgs(prisma: PrismaClient): Promise<IngestionOptions> {
   const args = process.argv.slice(2);
   
   let queries: string[] = [];
   let maxResultsPerQuery = 20;
+  let useIntelligentGeneration = false;
+  let findGaps = false;
   const apiKey = process.env.YOUTUBE_API_KEY;
 
   if (!apiKey) {
@@ -169,26 +227,62 @@ function parseArgs(): IngestionOptions {
     } else if (arg === '--max' && args[i + 1]) {
       maxResultsPerQuery = parseInt(args[i + 1], 10);
       i++;
+    } else if (arg === '--intelligent' || arg === '-i') {
+      useIntelligentGeneration = true;
+    } else if (arg === '--gaps') {
+      findGaps = true;
     }
   }
 
-  // Default queries if none provided
+  // If no manual queries provided, use intelligent generation
   if (queries.length === 0) {
-    queries = [
-      'miso pasta recipe',
-      'gochujang chicken',
-      'air fryer tofu',
-      'vegan pasta recipe',
-      'creamy pasta recipe',
-    ];
-    console.log('📝 No queries provided, using default queries:');
-    queries.forEach(q => console.log(`   - ${q}`));
+    useIntelligentGeneration = true;
+  }
+
+  // Generate intelligent queries if requested
+  if (useIntelligentGeneration || findGaps) {
+    console.log('🧠 Using intelligent query generation...');
+    console.log('   This builds Kitvas\'s ingredient-level intelligence moat\n');
+    
+    if (findGaps) {
+      console.log('🔍 Finding gap opportunities (high demand, low supply)...');
+      const gapQueries = await findGapOpportunities(prisma, 15);
+      if (gapQueries.length > 0) {
+        queries.push(...gapQueries);
+        console.log(`   Found ${gapQueries.length} gap opportunities\n`);
+      } else {
+        console.log('   No gap opportunities found, using intelligent generation instead\n');
+      }
+    }
+    
+    if (queries.length === 0 || !findGaps) {
+      const intelligentQueries = await generateIntelligentQueries(prisma, {
+        maxQueries: 30,
+        useAutocomplete: true,
+        useSearchPatterns: true,
+        usePopularCombinations: true,
+      });
+      queries.push(...intelligentQueries);
+    }
+    
+    if (queries.length === 0) {
+      console.warn('⚠️  No queries generated, falling back to popular combinations');
+      queries = [
+        'miso pasta',
+        'gochujang chicken',
+        'air fryer tofu',
+        'tahini pasta',
+        'harissa chicken',
+      ];
+    }
   }
 
   return {
     queries,
     maxResultsPerQuery,
     apiKey,
+    useIntelligentGeneration,
+    findGaps,
   };
 }
 
@@ -243,7 +337,19 @@ async function main() {
       process.exit(1);
     }
 
-    const options = parseArgs();
+    const options = await parseArgs(prisma);
+    
+    if (options.queries.length > 0) {
+      console.log(`\n📋 Generated ${options.queries.length} queries:`);
+      options.queries.slice(0, 10).forEach((q, i) => {
+        console.log(`   ${i + 1}. ${q}`);
+      });
+      if (options.queries.length > 10) {
+        console.log(`   ... and ${options.queries.length - 10} more`);
+      }
+      console.log('');
+    }
+    
     await ingestVideos(options);
   } catch (error) {
     console.error('❌ Fatal error:', error);
