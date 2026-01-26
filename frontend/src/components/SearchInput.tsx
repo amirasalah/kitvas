@@ -20,15 +20,24 @@ export function SearchInput({
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && inputValue.trim()) {
       e.preventDefault()
-      addIngredient(inputValue.trim())
+      addIngredients(inputValue)
     }
   }
 
-  const addIngredient = (ingredient: string) => {
-    if (ingredient && !ingredients.includes(ingredient) && ingredients.length < 10) {
-      onIngredientsChange([...ingredients, ingredient])
-      setInputValue('')
+  const addIngredients = (input: string) => {
+    // Split by comma and add each ingredient separately
+    const newIngredients = input
+      .split(',')
+      .map((ing) => ing.trim().toLowerCase())
+      .filter((ing) => ing && !ingredients.includes(ing))
+
+    const available = 10 - ingredients.length
+    const toAdd = newIngredients.slice(0, available)
+
+    if (toAdd.length > 0) {
+      onIngredientsChange([...ingredients, ...toAdd])
     }
+    setInputValue('')
   }
 
   const removeIngredient = (index: number) => {
@@ -39,7 +48,7 @@ export function SearchInput({
     <div className="space-y-4">
       <div>
         <label htmlFor="ingredients" className="block text-sm font-medium mb-2">
-          Search by Ingredients (up to 10)
+          Search by Ingredients (comma-separated, up to 10)
         </label>
         <div className="flex gap-2 flex-wrap">
           {ingredients.map((ingredient, index) => (
@@ -64,7 +73,7 @@ export function SearchInput({
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type ingredient and press Enter"
+              placeholder="e.g. miso, pasta, chicken"
               className="px-3 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
             />
           )}
