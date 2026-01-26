@@ -1,17 +1,24 @@
 /**
  * Ingredient Extraction Module
- * 
+ *
  * Extracts ingredients from video metadata (title, description).
  * This runs during batch pre-crawling to extract all ingredients upfront.
- * 
+ *
  * Strategy:
- * 1. Extract from title (highest confidence)
- * 2. Extract from description (medium confidence)
+ * 1. Use Claude API for intelligent ingredient extraction (primary)
+ * 2. Fall back to keyword-based extraction if API fails
  * 3. Normalize ingredient names
  * 4. Store with confidence scores
  */
 
 import { PrismaClient } from '@prisma/client';
+import Groq from 'groq-sdk';
+
+// Initialize Groq client (uses GROQ_API_KEY from environment)
+const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
+
+// Track if LLM API has failed to avoid spamming logs
+let llmApiDisabled = false;
 
 export interface ExtractedIngredient {
   name: string;
@@ -49,6 +56,78 @@ const INGREDIENT_KEYWORDS = [
   'kimchi', 'sauerkraut', 'pickles', 'capers', 'olives', 'sun-dried tomatoes',
   'nutritional yeast', 'coconut milk', 'cashew cream',
 ];
+
+/**
+ * Extract ingredients using Groq API (free tier available)
+ * Uses Llama 3.3 70B model for intelligent extraction
+ */
+async function extractWithLLM(
+  title: string,
+  description: string | null
+): Promise<ExtractedIngredient[] | null> {
+  // Skip if no API key configured or API has been disabled due to errors
+  if (!groq || llmApiDisabled) {
+    return null;
+  }
+
+  const text = description ? `Title: ${title}\n\nDescription: ${description}` : `Title: ${title}`;
+
+  try {
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'user',
+          content: `Extract all food ingredients mentioned in this cooking video metadata. Return ONLY a JSON array of objects with "name" (lowercase, singular form) and "source" ("title" or "description").
+
+Focus on:
+- Main proteins (chicken, beef, tofu, etc.)
+- Vegetables and fruits
+- Herbs, spices, and seasonings
+- Condiments and sauces (miso, gochujang, tahini, etc.)
+- Grains and starches
+- Dairy products
+- Oils and fats
+
+Do NOT include:
+- Cooking equipment or utensils
+- Cooking methods or techniques
+- Serving suggestions
+- Generic terms like "ingredients" or "recipe"
+
+${text}
+
+Respond with ONLY the JSON array, no other text. Example: [{"name": "chicken", "source": "title"}, {"name": "garlic", "source": "description"}]`
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 1024,
+    });
+
+    // Parse the response
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return null;
+    }
+
+    // Clean up response - sometimes LLMs add markdown code blocks
+    const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim();
+    const parsed = JSON.parse(jsonStr) as Array<{ name: string; source: 'title' | 'description' }>;
+
+    // Convert to ExtractedIngredient format with confidence scores
+    return parsed.map((item) => ({
+      name: normalizeIngredientName(item.name),
+      confidence: item.source === 'title' ? 0.95 : 0.85,
+      source: item.source,
+    }));
+  } catch (error) {
+    // Disable LLM API for this session to avoid spamming failed requests
+    llmApiDisabled = true;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.warn('⚠️  Groq API unavailable - using keyword extraction for this session:', errorMessage);
+    return null;
+  }
+}
 
 /**
  * Normalize ingredient name
@@ -123,10 +202,10 @@ function extractIngredientsFromText(
 }
 
 /**
- * Extract ingredients from video metadata
- * Combines extraction from title and description
+ * Extract ingredients from video metadata using keyword matching only
+ * Used as fallback when Claude API is unavailable
  */
-export function extractIngredientsFromVideo(
+export function extractIngredientsWithKeywords(
   title: string,
   description: string | null
 ): ExtractedIngredient[] {
@@ -151,6 +230,27 @@ export function extractIngredientsFromVideo(
   }
 
   return Array.from(ingredients.values());
+}
+
+/**
+ * Extract ingredients from video metadata
+ * Uses Claude API for intelligent extraction, falls back to keyword matching
+ */
+export async function extractIngredientsFromVideo(
+  title: string,
+  description: string | null
+): Promise<ExtractedIngredient[]> {
+  // Try LLM extraction first (Groq with Llama 3.3)
+  const llmResult = await extractWithLLM(title, description);
+  if (llmResult && llmResult.length > 0) {
+    console.log(`  [Groq] Extracted ${llmResult.length} ingredients`);
+    return llmResult;
+  }
+
+  // Fall back to keyword matching
+  const keywordResult = extractIngredientsWithKeywords(title, description);
+  console.log(`  [Keywords] Extracted ${keywordResult.length} ingredients`);
+  return keywordResult;
 }
 
 /**
@@ -215,8 +315,8 @@ export async function processVideoIngredients(
   description: string | null
 ): Promise<number> {
   try {
-    // Extract ingredients
-    const extracted = extractIngredientsFromVideo(title, description);
+    // Extract ingredients (uses Claude API with keyword fallback)
+    const extracted = await extractIngredientsFromVideo(title, description);
 
     if (extracted.length === 0) {
       return 0;

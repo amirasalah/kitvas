@@ -113,8 +113,8 @@ export async function generateQueriesFromAutocomplete(
       
       // Rate limiting
       await new Promise(resolve => setTimeout(resolve, 200));
-    } catch (error) {
-      console.warn(`Failed to fetch autocomplete for ${ingredient}:`, error);
+    } catch {
+      // Silently ignore autocomplete failures (Google API may be blocked or changed)
     }
   }
   

@@ -16,12 +16,14 @@
     "batch:daily": "tsx src/scripts/daily-batch-job.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@hono/node-server": "^1.12.0",
     "@hono/trpc-server": "^0.4.2",
     "@kitvas/shared": "*",
     "@prisma/client": "^5.7.1",
     "@trpc/server": "^11.8.1",
     "dotenv": "^17.2.3",
+    "groq-sdk": "^0.37.0",
     "hono": "^4.3.0",
     "zod": "^3.22.4"
   },
