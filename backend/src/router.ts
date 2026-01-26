@@ -1,13 +1,11 @@
 import { initTRPC } from '@trpc/server';
-import { Context } from './context';
-import { searchRouter } from './routers/search';
+import type { Context } from './context.js';
+import { searchRouter } from './routers/search.js';
 
-const t = initTRPC.context<Context>().create({
-  // tRPC v11 options
-});
+const t = initTRPC.context<Context>().create();
 
 export const appRouter = t.router({
-  search: searchRouter(t),
+  search: searchRouter,
 });
 
 export type AppRouter = typeof appRouter;

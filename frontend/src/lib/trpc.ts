@@ -7,13 +7,14 @@ import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server'
 export type { AppRouter }
 
 // Video result type (matches backend response)
+// Note: publishedAt is string because JSON serialization converts Date to ISO string
 export type VideoResult = {
   id: string
   youtubeId: string
   title: string
   description: string | null
   thumbnailUrl: string
-  publishedAt: Date
+  publishedAt: string
   views: number | null
   relevanceScore: number
   ingredients: Array<{

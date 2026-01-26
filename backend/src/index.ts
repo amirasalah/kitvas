@@ -1,24 +1,34 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
-import { trpcServer } from '@hono/trpc-server';
-import { appRouter } from './router';
-import { createContext } from './context';
+import { cors } from 'hono/cors';
+import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
+import { appRouter } from './router.js';
+import { createContext } from './context.js';
 
 const app = new Hono();
+
+// Enable CORS for frontend
+app.use('/*', cors({
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowHeaders: ['Content-Type'],
+}));
 
 // Health check
 app.get('/health', (c) => {
   return c.json({ status: 'ok' });
 });
 
-// tRPC endpoint
-app.use(
-  '/trpc/*',
-  trpcServer({
+// tRPC endpoint using fetch adapter (compatible with tRPC v11)
+app.use('/trpc/*', async (c) => {
+  const response = await fetchRequestHandler({
+    endpoint: '/trpc',
+    req: c.req.raw,
     router: appRouter,
-    createContext,
-  })
-);
+    createContext: () => createContext(),
+  });
+  return response;
+});
 
 const port = Number(process.env.PORT) || 3001;
 
