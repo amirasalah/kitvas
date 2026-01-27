@@ -22,6 +22,15 @@ export function SearchInput({
       e.preventDefault()
       addIngredients(inputValue)
     }
+    // Space key adds a comma to help user understand comma-separated format
+    if (e.key === ' ' && inputValue.trim() && !inputValue.endsWith(',') && !inputValue.endsWith(', ')) {
+      e.preventDefault()
+      setInputValue(inputValue.trim() + ', ')
+    }
+  }
+
+  const clearAllIngredients = () => {
+    onIngredientsChange([])
   }
 
   const addIngredients = (input: string) => {
@@ -50,7 +59,7 @@ export function SearchInput({
         <label htmlFor="ingredients" className="block text-sm font-medium mb-2">
           Search by Ingredients (comma-separated, up to 10)
         </label>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           {ingredients.map((ingredient, index) => (
             <span
               key={index}
@@ -66,6 +75,15 @@ export function SearchInput({
               </button>
             </span>
           ))}
+          {ingredients.length > 0 && (
+            <button
+              onClick={clearAllIngredients}
+              className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+              aria-label="Clear all ingredients"
+            >
+              Clear all
+            </button>
+          )}
           {ingredients.length < 10 && (
             <input
               id="ingredients"
@@ -73,7 +91,7 @@ export function SearchInput({
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="e.g. miso, pasta, chicken"
+              placeholder="Type ingredients (space adds comma, enter to search)"
               className="px-3 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
             />
           )}

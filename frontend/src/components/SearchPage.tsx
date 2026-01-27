@@ -52,8 +52,11 @@ export function SearchPage() {
 
         {searchQuery.data && (
           <SearchResults
-            videos={searchQuery.data.videos}
+            analyzedVideos={searchQuery.data.analyzedVideos}
+            youtubeVideos={searchQuery.data.youtubeVideos}
             demand={searchQuery.data.demand}
+            demandSignal={searchQuery.data.demandSignal}
+            rateLimitRemaining={searchQuery.data.rateLimitRemaining}
             opportunities={searchQuery.data.opportunities}
           />
         )}

@@ -4,6 +4,11 @@ import { cors } from 'hono/cors';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from './router.js';
 import { createContext } from './context.js';
+import { startExtractionWorker } from './lib/extraction-queue.js';
+import { PrismaClient } from '@prisma/client';
+
+// Initialize Prisma for extraction worker
+const prisma = new PrismaClient();
 
 const app = new Hono();
 
@@ -25,7 +30,7 @@ app.use('/trpc/*', async (c) => {
     endpoint: '/trpc',
     req: c.req.raw,
     router: appRouter,
-    createContext: () => createContext(),
+    createContext: () => createContext(undefined, c),
   });
   return response;
 });
@@ -37,4 +42,7 @@ serve({
   port,
 }, (info) => {
   console.log(`🚀 Backend server running on http://localhost:${info.port}`);
+
+  // Start background extraction worker
+  startExtractionWorker(prisma);
 });
