@@ -5,14 +5,20 @@
  * This runs during batch pre-crawling to extract all ingredients upfront.
  *
  * Strategy:
- * 1. Use Claude API for intelligent ingredient extraction (primary)
+ * 1. Use Groq LLM for intelligent ingredient extraction (primary)
  * 2. Fall back to keyword-based extraction if API fails
- * 3. Normalize ingredient names
+ * 3. Normalize ingredient names using synonym mapping (Week 5)
  * 4. Store with confidence scores
+ *
+ * Week 5 improvements:
+ * - Enhanced LLM prompt with stricter instructions and examples
+ * - Synonym-aware normalization (e.g., "tomatoes" -> "tomato")
+ * - Deduplication after normalization
  */
 
 import { PrismaClient } from '@prisma/client';
 import Groq from 'groq-sdk';
+import { normalizeIngredient } from './ingredient-synonyms.js';
 
 // Initialize Groq client (uses GROQ_API_KEY from environment)
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
@@ -77,27 +83,27 @@ async function extractWithLLM(
       model: 'llama-3.3-70b-versatile',
       messages: [
         {
+          role: 'system',
+          content: `You are a food ingredient extraction system. You extract ONLY actual food ingredients from cooking video metadata. You return structured JSON.
+
+RULES:
+1. Return ONLY a JSON array. No explanation, no markdown.
+2. Each item has "name" (lowercase, singular, canonical form) and "source" ("title" or "description").
+3. Use singular canonical forms: "tomato" not "tomatoes", "chicken" not "chickens", "almond" not "almonds".
+4. Extract specific ingredients, not dishes: "pasta" and "miso" not "miso pasta".
+5. Include: proteins, vegetables, fruits, herbs, spices, condiments, sauces, grains, dairy, oils, nuts, seeds, sweeteners.
+6. EXCLUDE: equipment (air fryer, oven), methods (baked, fried, grilled), dish names (stir fry, curry), serving suggestions, generic terms (recipe, ingredients, food), non-food items.
+7. For compound condiments (e.g., "soy sauce", "olive oil", "fish sauce"), keep them as one item.
+8. If the title says "Miso Pasta Recipe", extract "miso" and "pasta" separately.
+9. Only extract ingredients actually mentioned, do not infer or guess.`
+        },
+        {
           role: 'user',
-          content: `Extract all food ingredients mentioned in this cooking video metadata. Return ONLY a JSON array of objects with "name" (lowercase, singular form) and "source" ("title" or "description").
-
-Focus on:
-- Main proteins (chicken, beef, tofu, etc.)
-- Vegetables and fruits
-- Herbs, spices, and seasonings
-- Condiments and sauces (miso, gochujang, tahini, etc.)
-- Grains and starches
-- Dairy products
-- Oils and fats
-
-Do NOT include:
-- Cooking equipment or utensils
-- Cooking methods or techniques
-- Serving suggestions
-- Generic terms like "ingredients" or "recipe"
+          content: `Extract food ingredients from this cooking video:
 
 ${text}
 
-Respond with ONLY the JSON array, no other text. Example: [{"name": "chicken", "source": "title"}, {"name": "garlic", "source": "description"}]`
+JSON array:`
         }
       ],
       temperature: 0.1,
@@ -115,11 +121,17 @@ Respond with ONLY the JSON array, no other text. Example: [{"name": "chicken", "
     const parsed = JSON.parse(jsonStr) as Array<{ name: string; source: 'title' | 'description' }>;
 
     // Convert to ExtractedIngredient format with confidence scores
-    return parsed.map((item) => ({
-      name: normalizeIngredientName(item.name),
-      confidence: item.source === 'title' ? 0.95 : 0.85,
-      source: item.source,
-    }));
+    // Deduplicate after normalization (e.g., "tomato" and "tomatoes" -> same)
+    const deduped = new Map<string, ExtractedIngredient>();
+    for (const item of parsed) {
+      const name = normalizeIngredientName(item.name);
+      const confidence = item.source === 'title' ? 0.95 : 0.85;
+      const existing = deduped.get(name);
+      if (!existing || confidence > existing.confidence) {
+        deduped.set(name, { name, confidence, source: item.source });
+      }
+    }
+    return Array.from(deduped.values());
   } catch (error) {
     // Disable LLM API for this session to avoid spamming failed requests
     llmApiDisabled = true;
@@ -130,16 +142,11 @@ Respond with ONLY the JSON array, no other text. Example: [{"name": "chicken", "
 }
 
 /**
- * Normalize ingredient name
- * Converts to lowercase, handles plurals, removes extra spaces
+ * Normalize ingredient name using synonym mapping (Week 5)
+ * Delegates to the comprehensive synonym-based normalizer
  */
 function normalizeIngredientName(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/s$/, '') // Remove trailing 's' (basic plural handling)
-    .trim();
+  return normalizeIngredient(name);
 }
 
 /**

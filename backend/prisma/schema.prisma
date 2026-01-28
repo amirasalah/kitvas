@@ -35,13 +35,32 @@ model Video {
   publishedAt DateTime
   views       Int?
   extractedAt  DateTime?
-  
+  labeledAt    DateTime?  // When this video was manually verified/labeled
+  labeledBy    String?    // Admin who labeled it
+
   videoIngredients VideoIngredient[]
   corrections      Correction[]
-  
+  videoTags        VideoTag[]
+
   @@index([youtubeId])
   @@index([publishedAt])
+  @@index([labeledAt])
   // Full-text search index will be added via SQL migration
+}
+
+model VideoTag {
+  id         String @id @default(cuid())
+  videoId    String
+  tag        String   // e.g., "air fryer", "vegan", "korean"
+  category   String   // 'cooking_method' | 'dietary' | 'cuisine'
+  confidence Float    // 0-1
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, tag])
+  @@index([videoId])
+  @@index([tag])
+  @@index([category])
 }
 
 model Ingredient {

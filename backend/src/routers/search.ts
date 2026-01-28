@@ -6,6 +6,7 @@ import { checkRateLimit, incrementRateLimit, getRemainingSearches } from '../lib
 import { searchYouTubeVideos, getVideoDetails, type YouTubeVideo } from '../lib/youtube.js';
 import { calculateYouTubeDemandSignal } from '../lib/youtube-demand-calculator.js';
 import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/ingredient-extractor.js';
+import { extractTagsFromVideo, storeExtractedTags } from '../lib/tag-extractor.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -54,33 +55,46 @@ export const searchRouter = t.router({
   search: t.procedure
     .input(SearchInputSchema)
     .query(async ({ input, ctx }) => {
-      const { ingredients } = input;
+      const { ingredients, tags: filterTags } = input;
 
       try {
         // Normalize ingredient names (lowercase, trim)
         const normalizedIngredients = ingredients.map((ing) =>
           ing.toLowerCase().trim()
         );
+        const normalizedTags = filterTags?.map((t) => t.toLowerCase().trim()) || [];
 
         // 1. Always search database (fast, has ingredient data)
-        const videos = await ctx.prisma.video.findMany({
-          where: {
-            videoIngredients: {
-              some: {
-                ingredient: {
-                  name: {
-                    in: normalizedIngredients,
-                  },
+        const videoWhere: any = {
+          videoIngredients: {
+            some: {
+              ingredient: {
+                name: {
+                  in: normalizedIngredients,
                 },
               },
             },
           },
+        };
+
+        // If tags are specified, filter by them
+        if (normalizedTags.length > 0) {
+          videoWhere.videoTags = {
+            some: {
+              tag: { in: normalizedTags },
+            },
+          };
+        }
+
+        const videos = await ctx.prisma.video.findMany({
+          where: videoWhere,
           include: {
             videoIngredients: {
               include: {
                 ingredient: true,
               },
             },
+            videoTags: true,
           },
           take: 50,
           orderBy: {
@@ -110,6 +124,10 @@ export const searchRouter = t.router({
               name: vi.ingredient.name,
               confidence: vi.confidence,
               source: vi.source,
+            })),
+            tags: video.videoTags.map((vt) => ({
+              tag: vt.tag,
+              category: vt.category,
             })),
           };
         });
@@ -196,6 +214,19 @@ export const searchRouter = t.router({
               await storeExtractedIngredients(ctx.prisma, dbVideo.id, extractedIngredients);
             }
 
+            // Extract and store tags (cooking method, dietary, cuisine) - Week 5
+            try {
+              const extractedTags = await extractTagsFromVideo(
+                ytVideo.snippet.title,
+                ytVideo.snippet.description || null
+              );
+              if (extractedTags.length > 0) {
+                await storeExtractedTags(ctx.prisma, dbVideo.id, extractedTags);
+              }
+            } catch (tagError) {
+              console.warn(`[Search] Tag extraction failed for ${ytVideo.id}:`, tagError);
+            }
+
             // Calculate relevance score
             const matchingIngredients = extractedIngredients.filter(ing =>
               normalizedIngredients.includes(ing.name.toLowerCase())
@@ -204,31 +235,36 @@ export const searchRouter = t.router({
               ? matchingIngredients.length / normalizedIngredients.length
               : 0;
 
-            // Fetch the ingredient IDs from database for correction system
-            const videoWithIngredients = await ctx.prisma.video.findUnique({
+            // Fetch the ingredient IDs and tags from database for correction system
+            const videoWithDetails = await ctx.prisma.video.findUnique({
               where: { id: dbVideo.id },
               include: {
                 videoIngredients: {
                   include: { ingredient: true },
                 },
+                videoTags: true,
               },
             });
 
-            if (videoWithIngredients) {
+            if (videoWithDetails) {
               freshAnalyzedVideos.push({
-                id: videoWithIngredients.id,
-                youtubeId: videoWithIngredients.youtubeId,
-                title: videoWithIngredients.title,
-                description: videoWithIngredients.description,
-                thumbnailUrl: videoWithIngredients.thumbnailUrl,
-                publishedAt: videoWithIngredients.publishedAt,
-                views: videoWithIngredients.views,
+                id: videoWithDetails.id,
+                youtubeId: videoWithDetails.youtubeId,
+                title: videoWithDetails.title,
+                description: videoWithDetails.description,
+                thumbnailUrl: videoWithDetails.thumbnailUrl,
+                publishedAt: videoWithDetails.publishedAt,
+                views: videoWithDetails.views,
                 relevanceScore,
-                ingredients: videoWithIngredients.videoIngredients.map(vi => ({
+                ingredients: videoWithDetails.videoIngredients.map(vi => ({
                   id: vi.ingredient.id,
                   name: vi.ingredient.name,
                   confidence: vi.confidence,
                   source: vi.source,
+                })),
+                tags: videoWithDetails.videoTags.map(vt => ({
+                  tag: vt.tag,
+                  category: vt.category,
                 })),
               });
             }
