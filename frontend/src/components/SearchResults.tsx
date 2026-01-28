@@ -17,6 +17,8 @@ interface SearchResultsProps {
   demandSignal?: DemandSignal
   rateLimitRemaining?: number
   opportunities: ContentOpportunity[]
+  ingredients: string[]
+  lowRelevanceFallback?: boolean
 }
 
 export function SearchResults({
@@ -26,6 +28,8 @@ export function SearchResults({
   demandSignal,
   rateLimitRemaining,
   opportunities,
+  ingredients,
+  lowRelevanceFallback,
 }: SearchResultsProps) {
   const hasNoResults = analyzedVideos.length === 0 && youtubeVideos.length === 0
 
@@ -49,28 +53,29 @@ export function SearchResults({
         )}
       </div>
 
-      {/* Analyzed Videos Section */}
-      {analyzedVideos.length > 0 && (
+      {/* Opportunities Section - On Top */}
+      {opportunities.length > 0 && (
         <section>
-          <div className="mb-4">
-            <h2 className="text-2xl font-semibold">Analyzed Videos</h2>
-            <p className="text-sm text-gray-500">With ingredient detection</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {analyzedVideos.map((video) => (
-              <VideoCard key={video.id} video={video} />
+          <h2 className="text-2xl font-semibold mb-4">Opportunities</h2>
+          <div className="space-y-3">
+            {opportunities.map((opp, index) => (
+              <OpportunityCard
+                key={index}
+                opportunity={opp}
+                ingredients={ingredients}
+              />
             ))}
           </div>
         </section>
       )}
 
-      {/* Fresh YouTube Videos Section */}
+      {/* Fresh YouTube Videos Section - Before Analyzed */}
       {youtubeVideos.length > 0 && (
         <section>
           <div className="mb-4">
-            <h2 className="text-2xl font-semibold">More from YouTube</h2>
+            <h2 className="text-2xl font-semibold">Fresh from YouTube</h2>
             <p className="text-sm text-gray-500">
-              Fresh results (analyzing ingredients in background...)
+              New results being analyzed in the background
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -81,36 +86,22 @@ export function SearchResults({
         </section>
       )}
 
-      {/* Opportunities Section */}
-      {opportunities.length > 0 && (
+      {/* Analyzed Videos Section */}
+      {analyzedVideos.length > 0 && (
         <section>
-          <h2 className="text-2xl font-semibold mb-4">Opportunities</h2>
-          <div className="space-y-3">
-            {opportunities.map((opp, index) => {
-              const priorityStyles = {
-                high: 'border-l-green-500 bg-green-50',
-                medium: 'border-l-yellow-500 bg-yellow-50',
-                low: 'border-l-gray-400 bg-gray-50',
-              }
-              return (
-                <div
-                  key={index}
-                  className={`p-4 rounded-lg border-l-4 ${priorityStyles[opp.priority]}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium">{opp.title}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded ${
-                      opp.priority === 'high' ? 'bg-green-200 text-green-800' :
-                      opp.priority === 'medium' ? 'bg-yellow-200 text-yellow-800' :
-                      'bg-gray-200 text-gray-600'
-                    }`}>
-                      {opp.priority}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1">{opp.description}</p>
-                </div>
-              )
-            })}
+          <div className="mb-4">
+            <h2 className="text-2xl font-semibold">Analyzed Videos</h2>
+            <p className="text-sm text-gray-500">With ingredient detection</p>
+            {lowRelevanceFallback && (
+              <p className="text-sm text-yellow-600 mt-1">
+                No exact matches found. Showing partially matching videos - click ingredients to correct them.
+              </p>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {analyzedVideos.map((video) => (
+              <VideoCard key={video.id} video={video} />
+            ))}
           </div>
         </section>
       )}
@@ -281,8 +272,18 @@ function VideoCard({ video }: { video: VideoResult }) {
  * Card for fresh YouTube videos (no ingredient data yet)
  */
 function YouTubeVideoCard({ video }: { video: YouTubeVideoResult }) {
+  const [showAnalyzing, setShowAnalyzing] = useState(true)
+
+  // Hide the analyzing badge after 5 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowAnalyzing(false)
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow bg-gray-50">
+    <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
       <a
         href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
         target="_blank"
@@ -309,14 +310,17 @@ function YouTubeVideoCard({ video }: { video: YouTubeVideoResult }) {
           <p className="text-sm text-gray-600">
             {video.views ? `${video.views.toLocaleString()} views` : 'No view data'}
           </p>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded">
-              <svg className="w-3 h-3 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
-                <circle cx="10" cy="10" r="3" />
-              </svg>
-              Analyzing ingredients...
-            </span>
-          </div>
+          {showAnalyzing && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded">
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Queued for analysis
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -397,6 +401,85 @@ function IngredientTag({
           >
             ✗ Wrong
           </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Opportunity card with track button
+ */
+function OpportunityCard({
+  opportunity,
+  ingredients,
+}: {
+  opportunity: ContentOpportunity
+  ingredients: string[]
+}) {
+  const [trackFeedback, setTrackFeedback] = useState<string | null>(null)
+
+  const trackMutation = trpc.opportunities.track.useMutation({
+    onSuccess: (data) => {
+      setTrackFeedback(data.message)
+      setTimeout(() => setTrackFeedback(null), 4000)
+    },
+    onError: (error) => {
+      setTrackFeedback(`Error: ${error.message}`)
+      setTimeout(() => setTrackFeedback(null), 4000)
+    },
+  })
+
+  const handleTrack = () => {
+    trackMutation.mutate({
+      ingredients,
+      opportunityScore: opportunity.priority,
+      opportunityType: opportunity.type,
+      title: opportunity.title,
+    })
+  }
+
+  const priorityStyles = {
+    high: 'border-l-green-500 bg-green-50',
+    medium: 'border-l-yellow-500 bg-yellow-50',
+    low: 'border-l-gray-400 bg-gray-50',
+  }
+
+  return (
+    <div className={`p-4 rounded-lg border-l-4 ${priorityStyles[opportunity.priority]}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <p className="font-medium">{opportunity.title}</p>
+          <span
+            className={`text-xs px-2 py-0.5 rounded ${
+              opportunity.priority === 'high'
+                ? 'bg-green-200 text-green-800'
+                : opportunity.priority === 'medium'
+                ? 'bg-yellow-200 text-yellow-800'
+                : 'bg-gray-200 text-gray-600'
+            }`}
+          >
+            {opportunity.priority}
+          </span>
+        </div>
+        <button
+          onClick={handleTrack}
+          disabled={trackMutation.isPending}
+          className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+        >
+          {trackMutation.isPending ? 'Tracking...' : 'Track This'}
+        </button>
+      </div>
+      <p className="text-sm text-gray-600 mt-1">{opportunity.description}</p>
+      {trackFeedback && (
+        <div
+          className={`mt-2 text-xs p-2 rounded ${
+            trackFeedback.startsWith('Error')
+              ? 'bg-red-50 text-red-700'
+              : 'bg-blue-50 text-blue-700'
+          }`}
+        >
+          {trackFeedback}
         </div>
       )}
     </div>

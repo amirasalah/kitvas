@@ -3,9 +3,9 @@ import { TRPCError, initTRPC } from '@trpc/server';
 import type { Context } from '../context.js';
 import { getCachedSearch, setCachedSearch } from '../lib/search-cache.js';
 import { checkRateLimit, incrementRateLimit, getRemainingSearches } from '../lib/rate-limiter.js';
-import { queueForExtraction } from '../lib/extraction-queue.js';
 import { searchYouTubeVideos, getVideoDetails, type YouTubeVideo } from '../lib/youtube.js';
 import { calculateYouTubeDemandSignal } from '../lib/youtube-demand-calculator.js';
+import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/ingredient-extractor.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -89,7 +89,7 @@ export const searchRouter = t.router({
         });
 
         // Calculate relevance scores for database results
-        const analyzedVideos = videos.map((video) => {
+        const analyzedVideosUnfiltered = videos.map((video) => {
           const matchingIngredients = video.videoIngredients.filter((vi) =>
             normalizedIngredients.includes(vi.ingredient.name)
           );
@@ -104,6 +104,7 @@ export const searchRouter = t.router({
             publishedAt: video.publishedAt,
             views: video.views,
             relevanceScore,
+            matchingCount: matchingIngredients.length,
             ingredients: video.videoIngredients.map((vi) => ({
               id: vi.ingredient.id,
               name: vi.ingredient.name,
@@ -113,8 +114,35 @@ export const searchRouter = t.router({
           };
         });
 
+        // Filter out low-relevance videos
+        // Require at least 50% of searched ingredients OR at least 2 matching ingredients
+        const minRelevanceThreshold = 0.5;
+        const minMatchingIngredients = Math.min(2, normalizedIngredients.length);
+
+        let analyzedVideos = analyzedVideosUnfiltered
+          .filter((video) =>
+            video.relevanceScore >= minRelevanceThreshold ||
+            video.matchingCount >= minMatchingIngredients
+          )
+          .map(({ matchingCount, ...video }) => video);
+
+        // Fallback: if strict filtering returns no results, show videos with at least 1 match
+        // This ensures users still see ingredients and can provide corrections
+        let lowRelevanceFallback = false;
+        if (analyzedVideos.length === 0 && analyzedVideosUnfiltered.length > 0) {
+          analyzedVideos = analyzedVideosUnfiltered
+            .filter((video) => video.matchingCount >= 1)
+            .map(({ matchingCount, ...video }) => video);
+          lowRelevanceFallback = true;
+        }
+
         // Sort by relevance score
         analyzedVideos.sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+        // Limit fallback results to top 6 to avoid too many low-relevance results
+        if (lowRelevanceFallback) {
+          analyzedVideos = analyzedVideos.slice(0, 6);
+        }
 
         // 2. Check cache for YouTube results
         let youtubeVideos = getCachedSearch(normalizedIngredients);
@@ -128,31 +156,94 @@ export const searchRouter = t.router({
             setCachedSearch(normalizedIngredients, youtubeVideos);
             incrementRateLimit(ctx.userId || null, ctx.clientIp);
             rateLimitRemaining = getRemainingSearches(ctx.userId || null, ctx.clientIp);
-
-            // 4. Queue new videos for background extraction
-            const dbYoutubeIds = new Set(videos.map(v => v.youtubeId));
-            const newVideos = youtubeVideos.filter(v => !dbYoutubeIds.has(v.id));
-
-            if (newVideos.length > 0) {
-              queueForExtraction(newVideos, ctx.prisma).catch(err =>
-                console.error('[Search] Failed to queue videos:', err)
-              );
-            }
           }
         }
 
         // Filter YouTube results to exclude videos already in database
         const dbYoutubeIds = new Set(videos.map(v => v.youtubeId));
-        const freshYoutubeVideos = (youtubeVideos || [])
-          .filter(v => !dbYoutubeIds.has(v.id))
-          .map(v => ({
-            youtubeId: v.id,
-            title: v.snippet.title,
-            description: v.snippet.description,
-            thumbnailUrl: v.snippet.thumbnails.high?.url || v.snippet.thumbnails.medium?.url || v.snippet.thumbnails.default.url,
-            publishedAt: v.snippet.publishedAt,
-            views: v.statistics?.viewCount ? parseInt(v.statistics.viewCount, 10) : null,
-          }));
+        const freshYoutubeVideosRaw = (youtubeVideos || [])
+          .filter(v => !dbYoutubeIds.has(v.id));
+
+        // 4. Extract ingredients INLINE for fresh YouTube videos and store in database
+        // This enables the correction system immediately for new videos
+        const freshAnalyzedVideos: typeof analyzedVideos = [];
+
+        for (const ytVideo of freshYoutubeVideosRaw.slice(0, 10)) { // Limit to 10 to avoid slow response
+          try {
+            // Create video record in database
+            const dbVideo = await ctx.prisma.video.upsert({
+              where: { youtubeId: ytVideo.id },
+              update: {}, // Don't update if exists
+              create: {
+                youtubeId: ytVideo.id,
+                title: ytVideo.snippet.title,
+                description: ytVideo.snippet.description || null,
+                thumbnailUrl: ytVideo.snippet.thumbnails.high?.url || ytVideo.snippet.thumbnails.medium?.url || ytVideo.snippet.thumbnails.default.url,
+                publishedAt: new Date(ytVideo.snippet.publishedAt),
+                views: ytVideo.statistics?.viewCount ? parseInt(ytVideo.statistics.viewCount, 10) : null,
+                extractedAt: new Date(),
+              },
+            });
+
+            // Extract ingredients using LLM/keywords
+            const extractedIngredients = await extractIngredientsFromVideo(
+              ytVideo.snippet.title,
+              ytVideo.snippet.description || null
+            );
+
+            // Store ingredients in database (enables corrections)
+            if (extractedIngredients.length > 0) {
+              await storeExtractedIngredients(ctx.prisma, dbVideo.id, extractedIngredients);
+            }
+
+            // Calculate relevance score
+            const matchingIngredients = extractedIngredients.filter(ing =>
+              normalizedIngredients.includes(ing.name.toLowerCase())
+            );
+            const relevanceScore = normalizedIngredients.length > 0
+              ? matchingIngredients.length / normalizedIngredients.length
+              : 0;
+
+            // Fetch the ingredient IDs from database for correction system
+            const videoWithIngredients = await ctx.prisma.video.findUnique({
+              where: { id: dbVideo.id },
+              include: {
+                videoIngredients: {
+                  include: { ingredient: true },
+                },
+              },
+            });
+
+            if (videoWithIngredients) {
+              freshAnalyzedVideos.push({
+                id: videoWithIngredients.id,
+                youtubeId: videoWithIngredients.youtubeId,
+                title: videoWithIngredients.title,
+                description: videoWithIngredients.description,
+                thumbnailUrl: videoWithIngredients.thumbnailUrl,
+                publishedAt: videoWithIngredients.publishedAt,
+                views: videoWithIngredients.views,
+                relevanceScore,
+                ingredients: videoWithIngredients.videoIngredients.map(vi => ({
+                  id: vi.ingredient.id,
+                  name: vi.ingredient.name,
+                  confidence: vi.confidence,
+                  source: vi.source,
+                })),
+              });
+            }
+          } catch (error) {
+            console.error(`[Search] Failed to process fresh video ${ytVideo.id}:`, error);
+            // Continue with other videos
+          }
+        }
+
+        // Merge fresh analyzed videos with existing analyzed videos
+        // Fresh videos go first (they're the newest)
+        const allAnalyzedVideos = [...freshAnalyzedVideos, ...analyzedVideos];
+
+        // Sort all by relevance score
+        allAnalyzedVideos.sort((a, b) => b.relevanceScore - a.relevanceScore);
 
         // Log search pattern (moat contribution)
         try {
@@ -171,14 +262,23 @@ export const searchRouter = t.router({
         const demandSignal = calculateYouTubeDemandSignal(youtubeVideos || [], normalizedIngredients);
 
         return {
-          // Analyzed videos from database (with ingredient data)
-          analyzedVideos,
-          // Fresh videos from YouTube (no ingredients yet)
-          youtubeVideos: freshYoutubeVideos,
+          // All analyzed videos (database + freshly extracted from YouTube)
+          analyzedVideos: allAnalyzedVideos,
+          // Empty - all YouTube videos are now analyzed inline
+          youtubeVideos: [] as Array<{
+            youtubeId: string;
+            title: string;
+            description: string | null;
+            thumbnailUrl: string;
+            publishedAt: string;
+            views: number | null;
+          }>,
           // Rate limit info
           rateLimitRemaining,
+          // Flag indicating low-relevance fallback was used
+          lowRelevanceFallback,
           // Legacy field for backward compatibility
-          videos: analyzedVideos,
+          videos: allAnalyzedVideos,
           // YouTube market-based demand signals
           demand: demandSignal.demandBand,
           demandSignal: {

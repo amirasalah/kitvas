@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { trpc } from '@/app/providers'
 import { SearchInput } from './SearchInput'
 import { SearchResults } from './SearchResults'
@@ -23,10 +24,20 @@ export function SearchPage() {
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Kitvas</h1>
-          <p className="text-gray-600">
-            Intelligence platform for food content creators
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold mb-2">Kitvas</h1>
+              <p className="text-gray-600">
+                Intelligence platform for food content creators
+              </p>
+            </div>
+            <Link
+              href="/opportunities"
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              My Opportunities
+            </Link>
+          </div>
         </header>
 
         <SearchInput
@@ -58,6 +69,8 @@ export function SearchPage() {
             demandSignal={searchQuery.data.demandSignal}
             rateLimitRemaining={searchQuery.data.rateLimitRemaining}
             opportunities={searchQuery.data.opportunities}
+            ingredients={ingredients}
+            lowRelevanceFallback={searchQuery.data.lowRelevanceFallback}
           />
         )}
       </div>
