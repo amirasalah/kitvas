@@ -31,12 +31,20 @@ export function SearchPage() {
                 Intelligence platform for food content creators
               </p>
             </div>
-            <Link
-              href="/opportunities"
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              My Opportunities
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/admin/label"
+                className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+              >
+                Admin Labeling
+              </Link>
+              <Link
+                href="/opportunities"
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                My Opportunities
+              </Link>
+            </div>
           </div>
         </header>
 

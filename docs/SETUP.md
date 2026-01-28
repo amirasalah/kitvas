@@ -83,19 +83,25 @@ kitvas/
 
 ## Current Status
 
-✅ **Weeks 1-3, 6-7 Completed:**
+✅ **Weeks 1-7 Completed:**
 - Project structure set up (monorepo with frontend, backend, shared)
 - Next.js 14 frontend with App Router
 - Hono backend with tRPC
 - Prisma schema with all core tables
 - YouTube API integration
 - Ingredient extraction (Groq LLM + keyword fallback)
+- Ingredient synonym mapping & normalization (100+ canonical forms)
+- Tag detection system (cooking methods, dietary, cuisine)
+- Tag filtering in search UI
+- Accuracy measurement script (`npm run accuracy`)
 - Search UI with ingredient input
 - Demand intelligence system (HOT/GROWING/STABLE/NICHE)
 - Content opportunity detection
 - Correction system (users can fix ingredient detection - moat feature)
 - Opportunity tracking (track and manage content ideas - moat feature)
 - Outcome reporting (report video performance - moat feature)
+- Admin labeling tool for training data collection (`/admin/label`)
+- Dataset export (JSON/CSV) with train/validation/test splits (`/admin/label/export`)
 
 🚧 **In Progress:**
 - Week 8: Authentication + Payments
@@ -150,15 +156,17 @@ Once your database is set up:
    - Press Enter to search
    - You can add up to 10 ingredients
 
-4. Results will show:
+4. Use tag filters to narrow results by cooking method, dietary info, or cuisine
+
+5. Results will show:
    - **Demand Signal**: HOT/GROWING/STABLE/NICHE indicator with score
    - **Opportunities**: Content gaps and trending topics
-   - **Videos**: With detected ingredients (click to correct)
+   - **Videos**: With detected ingredients and tags (click ingredients to correct)
    - **Relevance Score**: How well each video matches your search
 
-5. Click on any ingredient tag to correct detection errors (moat feature)
+6. Click on any ingredient tag to correct detection errors (moat feature)
 
-6. Visit `/opportunities` to track and manage your content ideas
+7. Visit `/opportunities` to track and manage your content ideas
 
 ## Troubleshooting
 

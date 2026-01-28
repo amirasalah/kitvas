@@ -7,8 +7,8 @@
 | Week 1 | Foundation & Data Pipeline | ✅ Complete |
 | Week 2 | Ingredient Extraction | ✅ Complete |
 | Week 3 | Search Functionality | ✅ Complete |
-| Week 4 | Training Data Collection | ⏳ Pending |
-| Week 5 | ML Models & Improvement | ⏳ Pending |
+| Week 4 | Training Data Collection | ✅ Complete |
+| Week 5 | ML Models & Improvement | ✅ Complete |
 | Week 6 | Demand Intelligence + Corrections | ✅ Complete |
 | Week 7 | Opportunities & Tracking | ✅ Complete |
 | Week 8 | Auth + Payments | ⏳ Pending |
@@ -261,6 +261,171 @@ Opportunity scoring is integrated with the demand intelligence system from Week 
 - `submit` - Submit outcome report
 - `getStats` - Get user's outcome statistics
 - `getCommunityStats` - Get community statistics
+
+---
+
+## ✅ Completed: Week 5 (ML Models & Improvement)
+
+### Ingredient Synonym Mapping & Normalization ✅
+
+**Comprehensive ingredient normalization system** - Maps ingredient variations to canonical forms, improving extraction accuracy and search matching.
+
+#### Features Implemented:
+
+1. **Synonym Mapping** (`ingredient-synonyms.ts`)
+   - 100+ canonical ingredient entries with synonym variants
+   - Handles plurals (tomatoes -> tomato), qualifiers (fresh basil -> basil)
+   - Reverse lookup map for efficient O(1) normalization
+   - Helper functions: `isSameIngredient()`, `getSynonyms()`, `getAllCanonicalNames()`
+
+2. **Improved LLM Extraction Prompt**
+   - Enhanced system message with strict extraction rules
+   - Canonical singular form instructions (e.g., "tomato" not "tomatoes")
+   - Clear inclusion/exclusion criteria (ingredients vs equipment/methods/dishes)
+   - Post-extraction deduplication after normalization
+
+### Tag Detection System ✅
+
+**Automatic tag extraction for cooking methods, dietary info, and cuisine types** - Enriches video data with structured tags for filtering.
+
+#### Features Implemented:
+
+1. **Tag Extractor Module** (`tag-extractor.ts`)
+   - Keyword dictionaries for cooking methods, dietary, and cuisine categories
+   - LLM-based extraction (Groq) with keyword fallback
+   - Combined approach: LLM results merged with keyword detections
+   - Confidence scoring (LLM: 0.85-0.90, keywords: 0.70)
+
+2. **Tag Categories**
+   - **Cooking Methods**: air fryer, oven, stovetop, grill, instant pot, slow cooker, no cook
+   - **Dietary**: vegan, vegetarian, gluten-free, keto, dairy-free, low calorie
+   - **Cuisine**: korean, japanese, italian, mexican, indian, thai, chinese, mediterranean
+
+3. **Database Storage**
+   - `VideoTag` model with unique constraint on (videoId, tag)
+   - Indexes on videoId, tag, and category for efficient queries
+   - Integrated into inline extraction during search
+
+4. **Tag Filtering in Search**
+   - Tags passed as optional `tags` array in search input
+   - Database-level filtering via `videoTags.some` Prisma query
+   - Combined with ingredient search for precise results
+
+5. **Frontend Tag UI**
+   - `TagFilterGroup` component with color-coded categories (purple/green/orange)
+   - Toggle tags on/off with visual active state
+   - Active filters display with individual remove and "Clear all"
+   - Tag badges on video cards in search results
+
+### Accuracy Measurement ✅
+
+**Script to measure extraction accuracy against labeled ground truth** - Validates extraction quality meets the >70% F1 target.
+
+#### Features:
+- Compares current extraction against labeled videos
+- Calculates precision, recall, F1 score per video and overall
+- Reports exact match rate and score distribution
+- Identifies low-scoring videos for investigation
+- CLI with `--limit` flag: `npm run accuracy` or `npm run accuracy -- --limit 50`
+
+#### Schema Changes
+
+- Added `VideoTag` model (id, videoId, tag, category, confidence)
+- Unique constraint on `[videoId, tag]`
+- Indexes on videoId, tag, category
+
+#### Files Created
+
+- `backend/src/lib/ingredient-synonyms.ts` - Synonym mapping and normalization
+- `backend/src/lib/tag-extractor.ts` - Tag extraction module
+- `backend/src/scripts/measure-accuracy.ts` - Accuracy measurement script
+
+#### Files Modified
+
+- `backend/src/lib/ingredient-extractor.ts` - Enhanced LLM prompt, synonym normalization, deduplication
+- `backend/src/routers/search.ts` - Tag extraction integration, tag filtering, tags in response
+- `backend/prisma/schema.prisma` - Added VideoTag model
+- `backend/package.json` - Added `accuracy` npm script
+- `frontend/src/lib/trpc.ts` - Added VideoTag type
+- `frontend/src/components/SearchInput.tsx` - Tag filter UI with TagFilterGroup
+- `frontend/src/components/SearchResults.tsx` - Tag badges on video cards
+
+---
+
+## ✅ Completed: Week 4 (Training Data Collection)
+
+### Admin Labeling Tool ✅
+
+**Training data labeling interface** - Admin tool for reviewing, correcting, and verifying ingredient extraction on videos. Builds the labeled dataset needed for model improvement.
+
+#### Features Implemented:
+
+1. **Video Browser with Filters**
+   - Paginated list of extracted videos
+   - Filter by: unlabeled, labeled, all
+   - Search by video title
+   - Shows ingredient count, correction count, and labeled status
+
+2. **Ingredient Editor**
+   - View all detected ingredients with confidence scores and source
+   - Add missing ingredients (confidence: 1.0, source: `admin_label`)
+   - Remove incorrect ingredients
+   - Rename ingredients (creates new ingredient if needed)
+   - Hover-to-reveal edit actions
+
+3. **Labeling Workflow**
+   - Select video from list, editor panel opens
+   - Review/correct ingredients
+   - Mark as "Labeled" when verified
+   - Unmark to re-review
+   - Progress stats (total, labeled, unlabeled, % progress)
+
+4. **Recent Corrections Display**
+   - Shows last 10 corrections made on the video by any user
+   - Helps admin understand what users have already flagged
+
+#### Dataset Export ✅
+
+1. **Full Export**
+   - Export as JSON (structured with ingredients, confidence, source)
+   - Export as CSV (flat format for spreadsheet analysis)
+   - Filter: labeled only or all extracted videos
+
+2. **Train/Validation/Test Split**
+   - Configurable ratios (default: 70/15/15)
+   - Reproducible splits via random seed
+   - Validates minimum test ratio (5%)
+   - Exports single JSON with train/validation/test arrays and stats
+
+3. **Dataset Statistics**
+   - Total videos, labeled count, progress percentage
+   - Top 20 most common ingredients with counts
+   - Total corrections count
+
+#### Schema Changes
+
+- Added `labeledAt` (DateTime?) to Video model - when video was labeled
+- Added `labeledBy` (String?) to Video model - who labeled it
+- Added index on `labeledAt` for efficient filtering
+
+#### Files Created
+
+- `backend/src/routers/admin.ts` - Full admin tRPC router (getVideos, getVideo, markLabeled, unmarkLabeled, addIngredient, removeIngredient, renameIngredient, setConfidence, getStats, exportJSON, exportCSV, exportSplit)
+- `frontend/src/components/AdminLabelingPage.tsx` - Labeling UI with video list + editor
+- `frontend/src/components/AdminExportPage.tsx` - Export page with download options
+- `frontend/src/app/admin/label/page.tsx` - Admin labeling route
+- `frontend/src/app/admin/label/export/page.tsx` - Admin export route
+
+#### Files Modified
+
+- `backend/src/router.ts` - Added admin router
+- `backend/prisma/schema.prisma` - Added labeledAt, labeledBy fields to Video
+- `frontend/src/components/SearchPage.tsx` - Added Admin Labeling nav link
+
+#### Routes
+
+- `/admin/label` - Admin labeling interface
+- `/admin/label/export` - Dataset export page
 
 ---
 

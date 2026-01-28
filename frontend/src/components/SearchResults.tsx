@@ -259,6 +259,25 @@ function VideoCard({ video }: { video: VideoResult }) {
             </div>
           )}
 
+          {video.tags && video.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {video.tags.map((tag) => (
+                <span
+                  key={tag.tag}
+                  className={`text-xs px-1.5 py-0.5 rounded ${
+                    tag.category === 'cooking_method'
+                      ? 'bg-purple-100 text-purple-700'
+                      : tag.category === 'dietary'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-orange-100 text-orange-700'
+                  }`}
+                >
+                  {tag.tag}
+                </span>
+              ))}
+            </div>
+          )}
+
           <p className="text-xs text-gray-500">
             Relevance: {(video.relevanceScore * 100).toFixed(0)}%
           </p>

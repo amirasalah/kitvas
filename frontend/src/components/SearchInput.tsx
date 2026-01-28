@@ -103,7 +103,118 @@ export function SearchInput({
         )}
       </div>
 
-      {/* Tags filter will be implemented later */}
+      {/* Tag Filters */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-gray-700">Filter by Tags</p>
+        <div className="flex flex-wrap gap-2">
+          {/* Cooking Methods */}
+          <TagFilterGroup
+            label="Cooking"
+            options={['air fryer', 'oven', 'stovetop', 'grill', 'instant pot', 'slow cooker', 'no cook']}
+            selected={tags}
+            onToggle={(tag) => toggleTag(tag)}
+            color="purple"
+          />
+          {/* Dietary */}
+          <TagFilterGroup
+            label="Dietary"
+            options={['vegan', 'vegetarian', 'gluten-free', 'keto', 'dairy-free', 'low calorie']}
+            selected={tags}
+            onToggle={(tag) => toggleTag(tag)}
+            color="green"
+          />
+          {/* Cuisine */}
+          <TagFilterGroup
+            label="Cuisine"
+            options={['korean', 'japanese', 'italian', 'mexican', 'indian', 'thai', 'chinese', 'mediterranean']}
+            selected={tags}
+            onToggle={(tag) => toggleTag(tag)}
+            color="orange"
+          />
+        </div>
+        {tags.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Active filters:</span>
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full"
+              >
+                {tag}
+                <button
+                  onClick={() => toggleTag(tag)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <button
+              onClick={() => onTagsChange([])}
+              className="text-xs text-gray-500 hover:text-gray-700"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  function toggleTag(tag: string) {
+    if (tags.includes(tag)) {
+      onTagsChange(tags.filter((t) => t !== tag))
+    } else {
+      onTagsChange([...tags, tag])
+    }
+  }
+}
+
+function TagFilterGroup({
+  label,
+  options,
+  selected,
+  onToggle,
+  color,
+}: {
+  label: string
+  options: string[]
+  selected: string[]
+  onToggle: (tag: string) => void
+  color: 'purple' | 'green' | 'orange'
+}) {
+  const colors = {
+    purple: {
+      active: 'bg-purple-600 text-white',
+      inactive: 'bg-purple-50 text-purple-700 hover:bg-purple-100',
+    },
+    green: {
+      active: 'bg-green-600 text-white',
+      inactive: 'bg-green-50 text-green-700 hover:bg-green-100',
+    },
+    orange: {
+      active: 'bg-orange-600 text-white',
+      inactive: 'bg-orange-50 text-orange-700 hover:bg-orange-100',
+    },
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-gray-500">{label}:</span>
+      {options.map((opt) => {
+        const isSelected = selected.includes(opt)
+        return (
+          <button
+            key={opt}
+            onClick={() => onToggle(opt)}
+            className={`px-2 py-0.5 text-xs rounded-full transition-colors ${
+              isSelected ? colors[color].active : colors[color].inactive
+            }`}
+          >
+            {opt}
+          </button>
+        )
+      })}
     </div>
   )
 }

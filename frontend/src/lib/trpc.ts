@@ -8,6 +8,11 @@ export type { AppRouter }
 
 // Video result type (matches backend response for analyzed videos)
 // Note: publishedAt is string because JSON serialization converts Date to ISO string
+export type VideoTag = {
+  tag: string
+  category: string // 'cooking_method' | 'dietary' | 'cuisine'
+}
+
 export type VideoResult = {
   id: string
   youtubeId: string
@@ -23,6 +28,7 @@ export type VideoResult = {
     confidence: number
     source: string
   }>
+  tags?: VideoTag[]
 }
 
 // Fresh YouTube video result (no ingredient data yet)

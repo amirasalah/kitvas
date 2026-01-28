@@ -88,9 +88,11 @@ See `SETUP.md` for more details.
 ## Features (V1)
 
 - **Ingredient-based Search**: Search by ingredients, see relevant recipe videos
+- **Tag Filtering**: Filter by cooking method (air fryer, oven, etc.), dietary (vegan, keto, etc.), and cuisine (korean, italian, etc.)
 - **Demand Intelligence**: View demand signals (HOT/GROWING/STABLE/NICHE) with scores
 - **Content Opportunities**: Discover gaps in the market (quality_gap, freshness_gap, underserved, trending)
-- **Ingredient Detection**: AI-powered extraction from video titles and descriptions
+- **Ingredient Detection**: AI-powered extraction with synonym normalization (100+ canonical forms)
 - **Correction System**: Click ingredients to correct detection errors (moat feature)
 - **Opportunity Tracking**: Track and manage content ideas through your pipeline
 - **Outcome Reporting**: Report video performance to calibrate prediction accuracy
+- **Admin Labeling**: Label and export training data for model improvement (`/admin/label`)
