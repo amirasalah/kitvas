@@ -200,7 +200,6 @@ export const correctionsRouter = t.router({
           ingredient = await ctx.prisma.ingredient.create({
             data: {
               name: normalizedName,
-              synonyms: [],
             },
           });
         }

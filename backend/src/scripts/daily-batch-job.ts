@@ -156,6 +156,8 @@ async function runDailyBatchJob() {
                              snippet.thumbnails.default?.url,
                 publishedAt: new Date(snippet.publishedAt),
                 views: statistics?.viewCount ? parseInt(statistics.viewCount, 10) : null,
+                viewsUpdatedAt: new Date(),
+                channelId: snippet.channelId || null,
                 extractedAt: new Date(),
               },
             });

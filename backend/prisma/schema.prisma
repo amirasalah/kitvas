@@ -15,7 +15,6 @@ model User {
   email                 String   @unique
   subscription          String   @default("free") // 'free' | 'pro'
   createdAt             DateTime @default(now())
-  searchCountThisWeek   Int      @default(0)
   correctionsCount      Int      @default(0)
   
   searches              Search[]
@@ -33,10 +32,12 @@ model Video {
   description String?
   thumbnailUrl String
   publishedAt DateTime
-  views       Int?
-  extractedAt  DateTime?
-  labeledAt    DateTime?  // When this video was manually verified/labeled
-  labeledBy    String?    // Admin who labeled it
+  views          Int?
+  viewsUpdatedAt DateTime?  // When views were last refreshed from YouTube API
+  channelId      String?    // YouTube channel ID
+  extractedAt    DateTime?
+  labeledAt      DateTime?  // When this video was manually verified/labeled
+  labeledBy      String?    // Admin who labeled it
 
   videoIngredients VideoIngredient[]
   corrections      Correction[]
@@ -45,6 +46,7 @@ model Video {
   @@index([youtubeId])
   @@index([publishedAt])
   @@index([labeledAt])
+  @@index([viewsUpdatedAt])
   // Full-text search index will be added via SQL migration
 }
 
@@ -66,7 +68,6 @@ model VideoTag {
 model Ingredient {
   id        String   @id @default(cuid())
   name      String   @unique // normalized name (e.g., "tomato")
-  synonyms  String[] // ["tomatoes", "tomatoe"]
   createdAt DateTime @default(now())
   
   videoIngredients VideoIngredient[]
@@ -91,14 +92,18 @@ model VideoIngredient {
 }
 
 model Search {
-  id         String   @id @default(cuid())
-  userId     String?
-  ingredients String[] // searched ingredients
-  createdAt  DateTime @default(now())
-  
+  id            String   @id @default(cuid())
+  userId        String?
+  ingredients   String[] // searched ingredients
+  resultCount   Int?     // number of videos returned
+  hadYouTubeHit Boolean  @default(false) // did this search call YouTube API?
+  demandBand    String?  // demand band at time of search
+  createdAt     DateTime @default(now())
+
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
+
   @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 model Correction {
@@ -146,4 +151,25 @@ model Outcome {
   
   @@index([trackedOpportunityId])
   @@index([userId])
+}
+
+model DemandSignal {
+  id              String   @id @default(cuid())
+  ingredientKey   String   @unique // sorted, pipe-joined: "chicken|gochujang"
+  ingredients     String[]
+  demandScore     Int      // 0-100
+  demandBand      String   // 'hot' | 'growing' | 'stable' | 'niche' | 'unknown'
+  avgViews        Int
+  medianViews     Int
+  avgViewsPerDay  Int
+  videoCount      Int
+  contentGapScore Int      // 0-100
+  contentGapType  String   // 'underserved' | 'saturated' | 'balanced' | 'emerging'
+  confidence      Float    // 0-1
+  sampleSize      Int
+  calculatedAt    DateTime @default(now())
+
+  @@index([ingredientKey])
+  @@index([demandBand])
+  @@index([calculatedAt])
 }

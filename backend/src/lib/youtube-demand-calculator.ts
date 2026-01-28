@@ -392,10 +392,17 @@ export function calculateYouTubeDemandSignal(
     return createUnknownSignal();
   }
 
-  // Filter to videos matching at least 50% of searched ingredients
+  // Filter to videos matching a sufficient proportion of searched ingredients.
+  // For short ingredient lists (1-3), require ALL ingredients to match -
+  // otherwise a search for "pasta, chocolate" would include generic "pasta" videos
+  // and produce misleading demand signals.
+  // For longer lists (4+), require at least 50%.
+  const relevanceThreshold = ingredients.length <= 3
+    ? 1.0
+    : 0.5;
   const relevantVideos = videos.filter(video => {
     const relevance = calculateVideoRelevance(video, ingredients);
-    return relevance >= 0.5;
+    return relevance >= relevanceThreshold;
   });
 
   // If fewer than 3 relevant videos, return niche/unknown

@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { TRPCError, initTRPC } from '@trpc/server';
 import type { Context } from '../context.js';
-import { getCachedSearch, setCachedSearch } from '../lib/search-cache.js';
+import { getCachedSearch, setCachedSearch, getCacheKey } from '../lib/search-cache.js';
 import { checkRateLimit, incrementRateLimit, getRemainingSearches } from '../lib/rate-limiter.js';
 import { searchYouTubeVideos, getVideoDetails, type YouTubeVideo } from '../lib/youtube.js';
 import { calculateYouTubeDemandSignal } from '../lib/youtube-demand-calculator.js';
 import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/ingredient-extractor.js';
 import { extractTagsFromVideo, storeExtractedTags } from '../lib/tag-extractor.js';
+import { processBackgroundVideos } from '../lib/background-processor.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -186,12 +187,12 @@ export const searchRouter = t.router({
         // This enables the correction system immediately for new videos
         const freshAnalyzedVideos: typeof analyzedVideos = [];
 
-        for (const ytVideo of freshYoutubeVideosRaw.slice(0, 10)) { // Limit to 10 to avoid slow response
+        for (const ytVideo of freshYoutubeVideosRaw.slice(0, 10)) {
           try {
             // Create video record in database
             const dbVideo = await ctx.prisma.video.upsert({
               where: { youtubeId: ytVideo.id },
-              update: {}, // Don't update if exists
+              update: {},
               create: {
                 youtubeId: ytVideo.id,
                 title: ytVideo.snippet.title,
@@ -199,6 +200,8 @@ export const searchRouter = t.router({
                 thumbnailUrl: ytVideo.snippet.thumbnails.high?.url || ytVideo.snippet.thumbnails.medium?.url || ytVideo.snippet.thumbnails.default.url,
                 publishedAt: new Date(ytVideo.snippet.publishedAt),
                 views: ytVideo.statistics?.viewCount ? parseInt(ytVideo.statistics.viewCount, 10) : null,
+                viewsUpdatedAt: new Date(),
+                channelId: ytVideo.snippet.channelId || null,
                 extractedAt: new Date(),
               },
             });
@@ -287,21 +290,72 @@ export const searchRouter = t.router({
         // Sort all by relevance score
         allAnalyzedVideos.sort((a, b) => b.relevanceScore - a.relevanceScore);
 
+        // Process remaining fresh videos in background (fire-and-forget)
+        const remainingVideos = freshYoutubeVideosRaw.slice(10);
+        if (remainingVideos.length > 0) {
+          processBackgroundVideos(ctx.prisma, remainingVideos).catch((err: unknown) =>
+            console.error('[Search] Background video processing error:', err)
+          );
+        }
+
+        // Calculate demand signals from YouTube data (zero extra API calls)
+        // Pass ingredients to filter videos by relevance
+        const demandSignal = calculateYouTubeDemandSignal(youtubeVideos || [], normalizedIngredients);
+        const hadYouTubeHit = youtubeVideos !== null && youtubeVideos.length > 0;
+
+        // Persist demand signal to database for caching and historical tracking
+        if (hadYouTubeHit && demandSignal.sampleSize > 0) {
+          const ingredientKey = getCacheKey(normalizedIngredients);
+          try {
+            await ctx.prisma.demandSignal.upsert({
+              where: { ingredientKey },
+              update: {
+                demandScore: demandSignal.demandScore,
+                demandBand: demandSignal.demandBand,
+                avgViews: demandSignal.marketMetrics.avgViews,
+                medianViews: demandSignal.marketMetrics.medianViews,
+                avgViewsPerDay: demandSignal.marketMetrics.avgViewsPerDay,
+                videoCount: demandSignal.marketMetrics.videoCount,
+                contentGapScore: demandSignal.contentGap.score,
+                contentGapType: demandSignal.contentGap.type,
+                confidence: demandSignal.confidence,
+                sampleSize: demandSignal.sampleSize,
+                calculatedAt: new Date(),
+              },
+              create: {
+                ingredientKey,
+                ingredients: normalizedIngredients,
+                demandScore: demandSignal.demandScore,
+                demandBand: demandSignal.demandBand,
+                avgViews: demandSignal.marketMetrics.avgViews,
+                medianViews: demandSignal.marketMetrics.medianViews,
+                avgViewsPerDay: demandSignal.marketMetrics.avgViewsPerDay,
+                videoCount: demandSignal.marketMetrics.videoCount,
+                contentGapScore: demandSignal.contentGap.score,
+                contentGapType: demandSignal.contentGap.type,
+                confidence: demandSignal.confidence,
+                sampleSize: demandSignal.sampleSize,
+              },
+            });
+          } catch (error) {
+            console.error('[Search] Failed to persist demand signal:', error);
+          }
+        }
+
         // Log search pattern (moat contribution)
         try {
           await ctx.prisma.search.create({
             data: {
               ingredients: normalizedIngredients,
               userId: ctx.userId || null,
+              resultCount: allAnalyzedVideos.length,
+              hadYouTubeHit,
+              demandBand: demandSignal.demandBand,
             },
           });
         } catch (error) {
           console.error('Failed to log search:', error);
         }
-
-        // Calculate demand signals from YouTube data (zero extra API calls)
-        // Pass ingredients to filter videos by relevance
-        const demandSignal = calculateYouTubeDemandSignal(youtubeVideos || [], normalizedIngredients);
 
         return {
           // All analyzed videos (database + freshly extracted from YouTube)

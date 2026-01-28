@@ -222,7 +222,7 @@ export const adminRouter = t.router({
 
       if (!ingredient) {
         ingredient = await ctx.prisma.ingredient.create({
-          data: { name: normalizedName, synonyms: [] },
+          data: { name: normalizedName },
         });
       }
 
@@ -304,7 +304,7 @@ export const adminRouter = t.router({
 
       if (!newIngredient) {
         newIngredient = await ctx.prisma.ingredient.create({
-          data: { name: normalizedName, synonyms: [] },
+          data: { name: normalizedName },
         });
       }
 

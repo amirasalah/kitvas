@@ -281,7 +281,6 @@ export async function storeExtractedIngredients(
         update: {},
         create: {
           name: extracted.name,
-          synonyms: [],
         },
       });
 
