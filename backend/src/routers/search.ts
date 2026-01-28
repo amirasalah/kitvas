@@ -274,9 +274,15 @@ export const searchRouter = t.router({
           }
         }
 
+        // Filter fresh videos by tag if tag filters are active
+        const filteredFreshVideos = normalizedTags.length > 0
+          ? freshAnalyzedVideos.filter(video =>
+              video.tags.some(t => normalizedTags.includes(t.tag))
+            )
+          : freshAnalyzedVideos;
+
         // Merge fresh analyzed videos with existing analyzed videos
-        // Fresh videos go first (they're the newest)
-        const allAnalyzedVideos = [...freshAnalyzedVideos, ...analyzedVideos];
+        const allAnalyzedVideos = [...filteredFreshVideos, ...analyzedVideos];
 
         // Sort all by relevance score
         allAnalyzedVideos.sort((a, b) => b.relevanceScore - a.relevanceScore);

@@ -29,7 +29,7 @@ const COOKING_METHOD_KEYWORDS: Record<string, string[]> = {
   'slow cooker': ['slow cooker', 'crockpot', 'crock pot', 'crock-pot', 'slow cooked'],
   'instant pot': ['instant pot', 'instapot', 'pressure cooker', 'pressure cook'],
   'grill': ['grill', 'grilled', 'grilling', 'bbq', 'barbecue', 'chargrilled'],
-  'deep fry': ['deep fried', 'deep fry', 'deep-fried', 'fried'],
+  'deep fry': ['deep fried', 'deep fry', 'deep-fried'],
   'microwave': ['microwave', 'microwaved'],
   'no cook': ['no cook', 'no-cook', 'raw', 'no bake', 'no-bake'],
   'sous vide': ['sous vide', 'sous-vide'],
@@ -40,13 +40,13 @@ const COOKING_METHOD_KEYWORDS: Record<string, string[]> = {
 
 const DIETARY_KEYWORDS: Record<string, string[]> = {
   'vegan': ['vegan', 'plant based', 'plant-based'],
-  'vegetarian': ['vegetarian', 'veggie', 'meatless', 'meat-free', 'meat free'],
-  'gluten-free': ['gluten free', 'gluten-free', 'gf', 'no gluten'],
+  'vegetarian': ['vegetarian', 'meatless', 'meat-free', 'meat free'],
+  'gluten-free': ['gluten free', 'gluten-free', 'no gluten'],
   'dairy-free': ['dairy free', 'dairy-free', 'no dairy'],
   'keto': ['keto', 'ketogenic', 'low carb', 'low-carb'],
   'paleo': ['paleo', 'paleolithic'],
   'whole30': ['whole30', 'whole 30'],
-  'low calorie': ['low calorie', 'low-calorie', 'light', 'healthy', 'diet'],
+  'low calorie': ['low calorie', 'low-calorie'],
   'high protein': ['high protein', 'high-protein', 'protein rich', 'protein-rich'],
   'sugar-free': ['sugar free', 'sugar-free', 'no sugar', 'zero sugar'],
   'nut-free': ['nut free', 'nut-free', 'no nuts'],
@@ -54,22 +54,43 @@ const DIETARY_KEYWORDS: Record<string, string[]> = {
 
 const CUISINE_KEYWORDS: Record<string, string[]> = {
   'korean': ['korean', 'k-food', 'gochujang', 'kimchi', 'bibimbap', 'bulgogi', 'tteokbokki'],
-  'japanese': ['japanese', 'ramen', 'sushi', 'teriyaki', 'miso', 'udon', 'soba', 'tempura', 'katsu'],
-  'chinese': ['chinese', 'wok', 'dim sum', 'kung pao', 'szechuan', 'sichuan', 'cantonese'],
+  'japanese': ['japanese', 'ramen', 'sushi', 'teriyaki', 'udon', 'soba', 'tempura', 'katsu'],
+  'chinese': ['chinese', 'dim sum', 'kung pao', 'szechuan', 'sichuan', 'cantonese'],
   'thai': ['thai', 'pad thai', 'green curry', 'red curry', 'tom yum', 'tom kha'],
-  'indian': ['indian', 'curry', 'tikka', 'masala', 'biryani', 'tandoori', 'naan', 'dal', 'paneer'],
-  'italian': ['italian', 'pasta', 'risotto', 'bruschetta', 'carbonara', 'bolognese', 'pesto'],
-  'mexican': ['mexican', 'taco', 'tacos', 'burrito', 'enchilada', 'quesadilla', 'guacamole', 'salsa'],
+  'indian': ['indian', 'tikka', 'masala', 'biryani', 'tandoori', 'dal', 'paneer'],
+  'italian': ['italian', 'risotto', 'bruschetta', 'carbonara', 'bolognese', 'pesto'],
+  'mexican': ['mexican', 'taco', 'tacos', 'burrito', 'enchilada', 'quesadilla', 'guacamole'],
   'mediterranean': ['mediterranean', 'hummus', 'falafel', 'shawarma', 'tzatziki', 'tabbouleh'],
   'french': ['french', 'ratatouille', 'soufflé', 'souffle', 'crêpe', 'crepe', 'quiche', 'béarnaise'],
-  'american': ['american', 'burger', 'mac and cheese', 'bbq', 'cajun', 'southern'],
+  'american': ['american', 'mac and cheese', 'cajun', 'southern'],
   'middle eastern': ['middle eastern', 'lebanese', 'turkish', 'persian', 'israeli', 'shakshuka', 'baba ganoush'],
-  'vietnamese': ['vietnamese', 'pho', 'banh mi', 'spring roll'],
+  'vietnamese': ['vietnamese', 'pho', 'banh mi'],
   'greek': ['greek', 'souvlaki', 'gyro', 'moussaka'],
-  'spanish': ['spanish', 'paella', 'tapas', 'gazpacho', 'chorizo'],
-  'ethiopian': ['ethiopian', 'injera', 'berbere', 'wat'],
-  'caribbean': ['caribbean', 'jerk', 'jamaican', 'plantain'],
+  'spanish': ['spanish', 'paella', 'tapas', 'gazpacho'],
+  'ethiopian': ['ethiopian', 'injera', 'berbere'],
+  'caribbean': ['caribbean', 'jerk', 'jamaican'],
 };
+
+// Build set of all valid tags for LLM validation
+const ALL_VALID_TAGS: Set<string> = new Set([
+  ...Object.keys(COOKING_METHOD_KEYWORDS),
+  ...Object.keys(DIETARY_KEYWORDS),
+  ...Object.keys(CUISINE_KEYWORDS),
+]);
+
+/**
+ * Check if a keyword matches in text using word boundaries.
+ * Prevents substring false positives like "wat" matching "what".
+ */
+function matchesKeyword(text: string, keyword: string): boolean {
+  // Multi-word keywords are specific enough for includes()
+  if (keyword.includes(' ') || keyword.includes('-')) {
+    return text.includes(keyword);
+  }
+  // Single-word keywords need word boundary matching
+  const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+  return regex.test(text);
+}
 
 /**
  * Extract tags from video metadata using keyword matching
@@ -78,7 +99,8 @@ export function extractTagsWithKeywords(
   title: string,
   description: string | null
 ): ExtractedTag[] {
-  const text = `${title} ${description || ''}`.toLowerCase();
+  const titleLower = title.toLowerCase();
+  const text = `${titleLower} ${(description || '').toLowerCase()}`;
   const tags: Map<string, ExtractedTag> = new Map();
 
   const checkKeywords = (
@@ -87,8 +109,8 @@ export function extractTagsWithKeywords(
   ) => {
     for (const [tag, keywords] of Object.entries(dict)) {
       for (const kw of keywords) {
-        if (text.includes(kw)) {
-          const inTitle = title.toLowerCase().includes(kw);
+        if (matchesKeyword(text, kw)) {
+          const inTitle = matchesKeyword(titleLower, kw);
           const confidence = inTitle ? 0.9 : 0.7;
           const existing = tags.get(tag);
           if (!existing || confidence > existing.confidence) {
@@ -157,7 +179,8 @@ Only include tags clearly indicated in the text. Do not guess.`
         tag: item.tag.toLowerCase().trim(),
         category: item.category as ExtractedTag['category'],
         confidence: 0.85,
-      }));
+      }))
+      .filter((item) => ALL_VALID_TAGS.has(item.tag));
   } catch {
     // Fall through to keyword extraction
     return null;
