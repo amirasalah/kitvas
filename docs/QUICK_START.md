@@ -10,6 +10,10 @@ DATABASE_URL="postgresql://user:password@localhost:5432/kitvas"
 
 # YouTube API key (required)
 YOUTUBE_API_KEY="your-youtube-api-key-here"
+
+# Groq API key (recommended for better ingredient extraction)
+# Get free key at: https://console.groq.com/
+GROQ_API_KEY="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ```
 
 ## Step 2: Get a YouTube API Key
@@ -55,6 +59,9 @@ DATABASE_URL="postgresql://postgres:password@localhost:5432/kitvas"
 # YouTube API
 YOUTUBE_API_KEY="AIzaSyBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
+# Groq API (for ingredient extraction - free tier available)
+GROQ_API_KEY="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
 # Optional
 PORT=3001
 ENVIRONMENT=development
@@ -70,6 +77,11 @@ ENVIRONMENT=development
 ### "YOUTUBE_API_KEY not found"
 - Add YOUTUBE_API_KEY to your `.env` file
 - Make sure there are no quotes around the value (or use double quotes)
+
+### Slow ingredient extraction or "GROQ_API_KEY not found"
+- Add GROQ_API_KEY to your `.env` file for faster, more accurate ingredient extraction
+- Get a free API key from [Groq Console](https://console.groq.com/)
+- Without it, the system falls back to keyword-based extraction (still works, but less accurate)
 
 ### "Can't reach database server" (Supabase)
 

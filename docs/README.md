@@ -45,6 +45,7 @@ See `SETUP.md` for detailed environment variable setup.
    ```
    DATABASE_URL="postgresql://..."
    YOUTUBE_API_KEY="your-api-key"
+   GROQ_API_KEY="your-groq-api-key"  # Free at console.groq.com
    ```
 
 2. Create `frontend/.env.local` with:
@@ -81,4 +82,15 @@ See `SETUP.md` for more details.
 
 - **Frontend**: Next.js 14, Tailwind CSS, shadcn/ui, tRPC
 - **Backend**: Hono, tRPC, Prisma, PostgreSQL
+- **AI**: Groq (Llama 3.3 70B) for ingredient extraction
 - **Infrastructure**: Railway, Supabase, Upstash Redis
+
+## Features (V1)
+
+- **Ingredient-based Search**: Search by ingredients, see relevant recipe videos
+- **Demand Intelligence**: View demand signals (HOT/GROWING/STABLE/NICHE) with scores
+- **Content Opportunities**: Discover gaps in the market (quality_gap, freshness_gap, underserved, trending)
+- **Ingredient Detection**: AI-powered extraction from video titles and descriptions
+- **Correction System**: Click ingredients to correct detection errors (moat feature)
+- **Opportunity Tracking**: Track and manage content ideas through your pipeline
+- **Outcome Reporting**: Report video performance to calibrate prediction accuracy

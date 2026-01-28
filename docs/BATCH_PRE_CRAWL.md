@@ -196,6 +196,21 @@ Generates intelligent queries for batch crawling:
 - Search patterns inform future crawling
 - Compounds over time
 
+## Note: Inline Extraction (New)
+
+As of the latest update, ingredient extraction also happens **inline during search**:
+
+- When users search, fresh YouTube videos are extracted immediately using Groq LLM
+- Videos are stored in the database with ingredients right away
+- This complements batch pre-crawling by ensuring new videos have ingredient data instantly
+- Trade-off: Slightly slower search response (~2-3s) but much better UX
+
+**The batch pre-crawl remains important for:**
+- Building the initial database with a large corpus of videos
+- Processing videos in bulk efficiently (better rate limit management)
+- Filling gaps in coverage systematically
+- Running during off-peak hours to minimize user-facing latency
+
 ## Monitoring
 
 The batch job provides detailed statistics:

@@ -42,8 +42,8 @@ This will install dependencies for all workspaces (frontend, backend, shared).
 ```
 DATABASE_URL="postgresql://..."
 REDIS_URL="redis://..." (optional for now)
-ANTHROPIC_API_KEY="sk-ant-..." (for Week 2)
-YOUTUBE_API_KEY="AIza..." (for Week 1)
+GROQ_API_KEY="gsk_..." (for ingredient extraction - free tier available at console.groq.com)
+YOUTUBE_API_KEY="AIza..." (for YouTube search)
 PORT=3001
 ENVIRONMENT=development
 ```
@@ -83,21 +83,27 @@ kitvas/
 
 ## Current Status
 
-✅ **Week 1 Tasks Completed:**
-- Project structure set up
-- Next.js frontend initialized
+✅ **Weeks 1-3, 6-7 Completed:**
+- Project structure set up (monorepo with frontend, backend, shared)
+- Next.js 14 frontend with App Router
 - Hono backend with tRPC
-- Prisma schema defined
-- Basic search UI implemented
+- Prisma schema with all core tables
+- YouTube API integration
+- Ingredient extraction (Groq LLM + keyword fallback)
+- Search UI with ingredient input
+- Demand intelligence system (HOT/GROWING/STABLE/NICHE)
+- Content opportunity detection
+- Correction system (users can fix ingredient detection - moat feature)
+- Opportunity tracking (track and manage content ideas - moat feature)
+- Outcome reporting (report video performance - moat feature)
 
 🚧 **In Progress:**
-- Search functionality implementation
-- Database setup
+- Week 8: Authentication + Payments
 
 📋 **Next Steps:**
-- Set up YouTube API integration (Week 1)
-- Implement ingredient extraction (Week 2)
-- Complete search with ranking (Week 3)
+- Set up Supabase Auth (email/password + Google OAuth)
+- Integrate Stripe for subscriptions
+- Enforce feature limits by tier
 
 ## 5. Ingest Videos from YouTube
 
@@ -130,7 +136,7 @@ The script will:
 
 ## Testing the Search Feature
 
-Once you've ingested some videos:
+Once your database is set up:
 
 1. Start the development servers:
    ```bash
@@ -140,14 +146,19 @@ Once you've ingested some videos:
 2. Navigate to http://localhost:3000
 
 3. Enter ingredients in the search box (e.g., "miso", "pasta")
-   - Press Enter to add each ingredient
+   - Type ingredients separated by commas (space adds comma automatically)
+   - Press Enter to search
    - You can add up to 10 ingredients
 
-4. Results will appear automatically, ranked by relevance
+4. Results will show:
+   - **Demand Signal**: HOT/GROWING/STABLE/NICHE indicator with score
+   - **Opportunities**: Content gaps and trending topics
+   - **Videos**: With detected ingredients (click to correct)
+   - **Relevance Score**: How well each video matches your search
 
-**Note:** Search results will be empty until you:
-- Ingest videos (see step 5 above)
-- Extract ingredients from videos (Week 2 task)
+5. Click on any ingredient tag to correct detection errors (moat feature)
+
+6. Visit `/opportunities` to track and manage your content ideas
 
 ## Troubleshooting
 
