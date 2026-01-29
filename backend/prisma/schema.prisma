@@ -69,10 +69,11 @@ model Ingredient {
   id        String   @id @default(cuid())
   name      String   @unique // normalized name (e.g., "tomato")
   createdAt DateTime @default(now())
-  
+
   videoIngredients VideoIngredient[]
   corrections      Correction[]
-  
+  trends           IngredientTrend[]
+
   @@index([name])
 }
 
@@ -172,4 +173,68 @@ model DemandSignal {
   @@index([ingredientKey])
   @@index([demandBand])
   @@index([calculatedAt])
+}
+
+// ============================================================================
+// ML Training & Analytics Models
+// ============================================================================
+
+// Tracks ingredient popularity over time for trend analysis
+model IngredientTrend {
+  id           String     @id @default(cuid())
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  period       String     // 'daily' | 'weekly' | 'monthly'
+  periodStart  DateTime   // Start of the period (e.g., 2024-01-15 for daily)
+  searchCount  Int        // Number of searches containing this ingredient
+  videoCount   Int        // New videos with this ingredient in this period
+  avgViews     Int?       // Average views of videos with this ingredient
+
+  @@unique([ingredientId, period, periodStart])
+  @@index([period, periodStart])
+  @@index([searchCount])
+}
+
+// Aggregates correction patterns for extraction improvement
+model ExtractionFeedback {
+  id           String   @id @default(cuid())
+  pattern      String   // Text pattern (e.g., "ethiopian", "chocolate")
+  feedbackType String   // 'false_positive' | 'false_negative' | 'rename'
+  correctValue String?  // What it should be (null for false positives to block)
+  occurrences  Int      @default(1) // How many times this pattern was corrected
+  incorporated Boolean  @default(false) // Has this been added to extraction logic?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([pattern, feedbackType])
+  @@index([incorporated])
+  @@index([feedbackType, occurrences])
+}
+
+// Tracks how accurate opportunity predictions have been
+model OpportunityCalibration {
+  id               String   @id @default(cuid())
+  demandBand       String   // 'hot' | 'growing' | 'stable' | 'niche'
+  opportunityScore String   // 'high' | 'medium' | 'low'
+  totalOutcomes    Int      // Number of outcomes in this bucket
+  avgViews7day     Int      // Average 7-day views for this bucket
+  avgRating        Float    // Average user rating (1-5)
+  successRate      Float    // Percentage with rating >= 4
+  calculatedAt     DateTime @default(now())
+
+  @@unique([demandBand, opportunityScore])
+  @@index([calculatedAt])
+}
+
+// Historical snapshots of extraction accuracy for tracking improvement
+model AccuracySnapshot {
+  id         String   @id @default(cuid())
+  precision  Float    // True positives / (True positives + False positives)
+  recall     Float    // True positives / (True positives + False negatives)
+  f1         Float    // Harmonic mean of precision and recall
+  exactMatch Float    // Percentage with zero errors
+  sampleSize Int      // Number of labeled videos used
+  measuredAt DateTime @default(now())
+
+  @@index([measuredAt])
 }

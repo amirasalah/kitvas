@@ -10,6 +10,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { YouTubeVideo } from './youtube.js';
 import { extractIngredientsFromVideo, storeExtractedIngredients } from './ingredient-extractor.js';
 import { extractTagsFromVideo, storeExtractedTags } from './tag-extractor.js';
+import { fetchTranscript } from './transcript-fetcher.js';
 
 export async function processBackgroundVideos(
   prisma: PrismaClient,
@@ -33,9 +34,18 @@ export async function processBackgroundVideos(
         },
       });
 
+      // Try to fetch transcript for better ingredient detection
+      let transcript: string | null = null;
+      try {
+        transcript = await fetchTranscript(ytVideo.id);
+      } catch {
+        // Transcript not available — continue without
+      }
+
       const extractedIngredients = await extractIngredientsFromVideo(
         ytVideo.snippet.title,
-        ytVideo.snippet.description || null
+        ytVideo.snippet.description || null,
+        transcript
       );
 
       if (extractedIngredients.length > 0) {

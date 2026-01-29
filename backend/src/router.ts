@@ -5,6 +5,7 @@ import { correctionsRouter } from './routers/corrections.js';
 import { opportunitiesRouter } from './routers/opportunities.js';
 import { outcomesRouter } from './routers/outcomes.js';
 import { adminRouter } from './routers/admin.js';
+import { analyticsRouter } from './routers/analytics.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -14,6 +15,7 @@ export const appRouter = t.router({
   opportunities: opportunitiesRouter,
   outcomes: outcomesRouter,
   admin: adminRouter,
+  analytics: analyticsRouter,
 });
 
 export type AppRouter = typeof appRouter;

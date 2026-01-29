@@ -8,6 +8,7 @@ import { calculateYouTubeDemandSignal } from '../lib/youtube-demand-calculator.j
 import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/ingredient-extractor.js';
 import { extractTagsFromVideo, storeExtractedTags } from '../lib/tag-extractor.js';
 import { processBackgroundVideos } from '../lib/background-processor.js';
+import { fetchTranscript } from '../lib/transcript-fetcher.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -206,10 +207,22 @@ export const searchRouter = t.router({
               },
             });
 
-            // Extract ingredients using LLM/keywords
+            // Try to fetch transcript for better ingredient detection
+            let transcript: string | null = null;
+            try {
+              transcript = await fetchTranscript(ytVideo.id);
+              if (transcript) {
+                console.log(`[Search] Fetched transcript for ${ytVideo.id} (${transcript.length} chars)`);
+              }
+            } catch {
+              // Transcript not available — continue without
+            }
+
+            // Extract ingredients using LLM/keywords (and transcript if available)
             const extractedIngredients = await extractIngredientsFromVideo(
               ytVideo.snippet.title,
-              ytVideo.snippet.description || null
+              ytVideo.snippet.description || null,
+              transcript
             );
 
             // Store ingredients in database (enables corrections)

@@ -14,9 +14,17 @@ const app = new Hono();
 
 // Enable CORS for frontend
 app.use('/*', cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: (origin) => {
+    // Allow localhost on any port for development
+    if (!origin || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+      return origin || '*';
+    }
+    return null;
+  },
   allowMethods: ['GET', 'POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type'],
+  allowHeaders: ['Content-Type', 'trpc-batch-mode'],
+  exposeHeaders: ['Content-Length'],
+  credentials: true,
 }));
 
 // Health check
@@ -35,7 +43,7 @@ app.use('/trpc/*', async (c) => {
   return response;
 });
 
-const port = Number(process.env.PORT) || 3001;
+const port = Number(process.env.PORT) || 4001;
 
 serve({
   fetch: app.fetch,
