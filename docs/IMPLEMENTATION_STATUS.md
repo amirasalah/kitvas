@@ -11,6 +11,7 @@
 | Week 5 | ML Models & Improvement | ✅ Complete |
 | Week 6 | Demand Intelligence + Corrections | ✅ Complete |
 | Week 7 | Opportunities & Tracking | ✅ Complete |
+| Week 7+ | ML Training & Analytics | ✅ Complete |
 | Week 8 | Auth + Payments | ⏳ Pending |
 | Week 9 | Trends + Polish + Launch | ⏳ Pending |
 
@@ -426,6 +427,105 @@ Opportunity scoring is integrated with the demand intelligence system from Week 
 
 - `/admin/label` - Admin labeling interface
 - `/admin/label/export` - Dataset export page
+
+---
+
+## ✅ Completed: ML Training & Analytics System
+
+### Analytics Infrastructure ✅
+
+**New Database Models** (schema.prisma):
+- `IngredientTrend` - Tracks ingredient popularity over time (daily/weekly/monthly)
+- `ExtractionFeedback` - Aggregates correction patterns for extraction improvement
+- `OpportunityCalibration` - Stores prediction accuracy metrics by demand band + score
+- `AccuracySnapshot` - Historical extraction accuracy tracking (precision/recall/F1)
+
+**Analytics Router** (`backend/src/routers/analytics.ts`):
+- `trending` - Top ingredients by search volume with growth % (7d/30d/90d)
+- `seasonal` - Ingredient popularity by month for planning
+- `contentGaps` - Underserved ingredient combinations (high search, low video)
+- `coOccurrence` - Ingredients frequently searched together
+- `extractionAccuracy` - Precision/recall/F1 metrics with history
+- `opportunityCalibration` - Prediction accuracy data by tier
+- `dashboard` - Single endpoint for insights UI
+- `exportCorrections` - Training data export
+- `extractionFeedback` - Feedback patterns for prompt improvement
+
+### Extraction Improvement System ✅
+
+**Dynamic Feedback Loop** (`backend/src/lib/ingredient-extractor.ts`):
+- Dynamic blocklist populated from ExtractionFeedback (false positives)
+- Dynamic allowlist for commonly missed ingredients (false negatives)
+- Rename mappings from user corrections
+- LLM prompt enhancement with blocklist items as negative examples
+- Auto-refresh every hour from database
+
+**Correction Aggregation** (`backend/src/scripts/aggregate-corrections.ts`):
+- Analyzes corrections to identify extraction patterns
+- Groups by action type (wrong/add/rename)
+- Generates prompt improvement suggestions
+- Tracks pattern occurrences for threshold-based inclusion
+
+### Opportunity Calibration ✅
+
+**Calibration Script** (`backend/src/scripts/calibrate-opportunities.ts`):
+- Correlates predicted opportunity scores with actual outcomes
+- Groups by (demandBand, opportunityScore) buckets
+- Calculates success rates, avg views, avg ratings
+- Provides calibration accuracy analysis
+
+**Opportunity Classifier** (`backend/src/lib/opportunity-classifier.ts`):
+- Rule-based classifier using calibration data
+- Confidence scoring based on actual outcomes
+- Human-readable reasoning for each classification
+- No external ML dependencies (pure TypeScript)
+
+### Trend Aggregation ✅
+
+**Aggregation Script** (`backend/src/scripts/aggregate-trends.ts`):
+- Daily, weekly, monthly trend aggregation
+- Backfill support (`--backfill=30` for historical data)
+- Ingredient popularity tracking over time
+- Video count and average views per ingredient
+
+### Transcript Support ✅
+
+**YouTube Transcript Fetching** (`backend/src/lib/transcript-fetcher.ts`):
+- Fetches transcripts using `youtube-transcript` package
+- No YouTube API quota cost (free, unofficial API)
+- Integrated into search flow and background processing
+- Ingredients extracted from transcripts with `source: 'transcript'`
+
+#### Files Created
+
+- `backend/src/routers/analytics.ts` - Full analytics tRPC router
+- `backend/src/scripts/aggregate-trends.ts` - Daily trend aggregation
+- `backend/src/scripts/aggregate-corrections.ts` - Correction pattern extraction
+- `backend/src/scripts/calibrate-opportunities.ts` - Weekly calibration
+- `backend/src/lib/opportunity-classifier.ts` - Rule-based classifier
+- `backend/src/lib/transcript-fetcher.ts` - YouTube transcript fetching
+
+#### Files Modified
+
+- `backend/prisma/schema.prisma` - Added IngredientTrend, ExtractionFeedback, OpportunityCalibration, AccuracySnapshot models
+- `backend/src/router.ts` - Added analytics router
+- `backend/src/lib/ingredient-extractor.ts` - Dynamic blocklist, enhanced prompts, transcript support
+- `backend/src/routers/search.ts` - Transcript fetching for fresh videos
+- `backend/src/lib/background-processor.ts` - Transcript support for background videos
+
+#### Scripts for Cron Jobs
+
+```bash
+# Daily: Aggregate trends and corrections
+npx tsx src/scripts/aggregate-trends.ts
+npx tsx src/scripts/aggregate-corrections.ts
+
+# Weekly: Calibrate opportunity predictions
+npx tsx src/scripts/calibrate-opportunities.ts
+
+# Backfill: Historical trend data
+npx tsx src/scripts/aggregate-trends.ts --backfill=30
+```
 
 ---
 

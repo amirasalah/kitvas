@@ -18,7 +18,6 @@ export type Video = z.infer<typeof VideoSchema>;
 export const IngredientSchema = z.object({
   id: z.string(),
   name: z.string(),
-  synonyms: z.array(z.string()).optional(),
 });
 
 export type Ingredient = z.infer<typeof IngredientSchema>;

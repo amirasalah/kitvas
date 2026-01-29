@@ -234,10 +234,51 @@ Errors: 0
    Coverage: 98% of videos have ingredients
 ```
 
+## Transcript Support ✅ (Implemented)
+
+Ingredient extraction now includes YouTube video transcripts for better accuracy:
+
+### How It Works
+
+1. **Transcript Fetching** (`backend/src/lib/transcript-fetcher.ts`)
+   - Uses `youtube-transcript` npm package (free, no API quota cost)
+   - Fetches English transcripts when available
+   - Handles videos without transcripts gracefully
+
+2. **Integration Points**
+   - **Search Flow**: Fresh YouTube videos fetch transcripts inline
+   - **Background Processing**: Background-processed videos also fetch transcripts
+   - **Extraction**: Transcripts passed to Groq LLM for ingredient extraction
+
+3. **Source Tracking**
+   - Ingredients from transcripts have `source: 'transcript'`
+   - Confidence capped at 0.80 (slightly lower than title/description)
+   - Title/description sources take priority over transcript for same ingredient
+
+### Usage
+
+```typescript
+import { fetchTranscript } from './lib/transcript-fetcher.js';
+
+// Fetch transcript for a video
+const transcript = await fetchTranscript(videoId);
+if (transcript) {
+  console.log(`Got ${transcript.length} chars of transcript`);
+}
+```
+
+### Trade-offs
+
+- **Pros**: Better ingredient detection for videos where ingredients are spoken but not in title/description
+- **Cons**: Slightly slower processing (~1-2s per video), some videos don't have transcripts
+- **Rate Limiting**: 2-second delay recommended between transcript fetches to avoid bot detection
+
+---
+
 ## Future Enhancements
 
 1. **ML-Based Extraction**: Replace keyword matching with ML model
-2. **Transcript Analysis**: Extract from video transcripts (higher accuracy)
+2. ~~**Transcript Analysis**: Extract from video transcripts (higher accuracy)~~ ✅ Implemented
 3. **Image Analysis**: Extract from video thumbnails/frames
 4. **Incremental Updates**: Only fetch new videos since last run
 5. **Priority Queue**: Prioritize high-demand ingredient combinations
