@@ -79,6 +79,7 @@ export function SearchPage() {
             opportunities={searchQuery.data.opportunities}
             ingredients={ingredients}
             lowRelevanceFallback={searchQuery.data.lowRelevanceFallback}
+            onAddIngredient={(ing) => setIngredients([...ingredients, ing])}
           />
         )}
       </div>

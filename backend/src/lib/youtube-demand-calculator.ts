@@ -245,7 +245,7 @@ function calculateContentGap(
   } else if (freshness.recentVideoCount < 3 && metrics.avgViews > 50000) {
     score += 20;
     type = 'underserved';
-    reasons.push('Established demand but few recent videos');
+    reasons.push('High-performing older content dominates search results');
   }
 
   // Factor 4: Velocity
@@ -329,7 +329,7 @@ function generateOpportunities(
     opportunities.push({
       type: 'freshness_gap',
       title: 'Content Freshness Gap',
-      description: `Only ${freshness.recentVideoCount} videos in the last 90 days despite ${formatViews(metrics.avgViews)} average views. Viewers may be hungry for new content.`,
+      description: `Few recent uploads among top-ranking videos (${freshness.recentVideoCount} of ${metrics.videoCount} from last 90 days). With ${formatViews(metrics.avgViews)} avg views, new quality content could rank well.`,
       priority: 'high',
     });
   }

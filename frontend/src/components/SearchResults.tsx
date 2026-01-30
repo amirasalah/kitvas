@@ -9,6 +9,7 @@ import type {
   DemandSignal,
   ContentOpportunity,
 } from '@/lib/trpc'
+import { IngredientGaps } from './IngredientGaps'
 
 interface SearchResultsProps {
   analyzedVideos: VideoResult[]
@@ -19,6 +20,7 @@ interface SearchResultsProps {
   opportunities: ContentOpportunity[]
   ingredients: string[]
   lowRelevanceFallback?: boolean
+  onAddIngredient?: (ingredient: string) => void
 }
 
 export function SearchResults({
@@ -30,6 +32,7 @@ export function SearchResults({
   opportunities,
   ingredients,
   lowRelevanceFallback,
+  onAddIngredient,
 }: SearchResultsProps) {
   const hasNoResults = analyzedVideos.length === 0 && youtubeVideos.length === 0
 
@@ -52,6 +55,11 @@ export function SearchResults({
           </span>
         )}
       </div>
+
+      {/* Ingredient Gap Opportunities - Moat Feature */}
+      {ingredients.length >= 1 && (
+        <IngredientGaps ingredients={ingredients} onAddIngredient={onAddIngredient} />
+      )}
 
       {/* Opportunities Section - On Top */}
       {opportunities.length > 0 && (
@@ -132,9 +140,16 @@ function DemandBadge({
 
   const config = demandConfig[demand]
 
+  // Confidence indicator based on sample size and confidence score
+  const getConfidenceLabel = (confidence: number): { label: string; color: string } => {
+    if (confidence >= 0.8) return { label: 'High confidence', color: 'text-green-600' }
+    if (confidence >= 0.5) return { label: 'Medium confidence', color: 'text-yellow-600' }
+    return { label: 'Low confidence', color: 'text-orange-600' }
+  }
+
   return (
     <div className="p-4 bg-gray-50 rounded-lg space-y-2">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg border ${config.color}`}>
           <span className="font-semibold">{config.label}</span>
           {demandSignal && (
@@ -146,6 +161,14 @@ function DemandBadge({
             <span>Avg views: {formatViews(demandSignal.avgViews)}</span>
             <span className="mx-2">·</span>
             <span>{formatViews(demandSignal.avgViewsPerDay)} views/day</span>
+          </div>
+        )}
+        {demandSignal && demandSignal.confidence !== undefined && (
+          <div className={`text-xs px-2 py-1 rounded-full bg-gray-100 ${getConfidenceLabel(demandSignal.confidence).color}`}>
+            {getConfidenceLabel(demandSignal.confidence).label}
+            <span className="text-gray-400 ml-1" title={`Based on ${demandSignal.videoCount} videos from YouTube search`}>
+              (n={demandSignal.videoCount})
+            </span>
           </div>
         )}
       </div>

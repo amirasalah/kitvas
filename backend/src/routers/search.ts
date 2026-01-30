@@ -23,7 +23,7 @@ const SearchInputSchema = z.object({
  */
 async function searchYouTubeLive(
   ingredients: string[],
-  maxResults: number = 20
+  maxResults: number = 50
 ): Promise<YouTubeVideo[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) {
@@ -134,35 +134,45 @@ export const searchRouter = t.router({
           };
         });
 
-        // Filter out low-relevance videos
-        // Require at least 50% of searched ingredients OR at least 2 matching ingredients
-        const minRelevanceThreshold = 0.5;
-        const minMatchingIngredients = Math.min(2, normalizedIngredients.length);
-
-        let analyzedVideos = analyzedVideosUnfiltered
-          .filter((video) =>
-            video.relevanceScore >= minRelevanceThreshold ||
-            video.matchingCount >= minMatchingIngredients
-          )
-          .map(({ matchingCount, ...video }) => video);
-
-        // Fallback: if strict filtering returns no results, show videos with at least 1 match
-        // This ensures users still see ingredients and can provide corrections
+        // Filter videos with tiered relevance fallback
+        // Priority: 100% matches > partial matches (if not enough exact) > any matches
+        let filteredVideos = [] as typeof analyzedVideosUnfiltered;
         let lowRelevanceFallback = false;
-        if (analyzedVideos.length === 0 && analyzedVideosUnfiltered.length > 0) {
-          analyzedVideos = analyzedVideosUnfiltered
-            .filter((video) => video.matchingCount >= 1)
-            .map(({ matchingCount, ...video }) => video);
-          lowRelevanceFallback = true;
+
+        // First: Get videos with 100% ingredient match (all searched ingredients present)
+        const exactMatches = analyzedVideosUnfiltered.filter(
+          (video) => video.relevanceScore === 1.0
+        );
+
+        if (exactMatches.length >= 3 || normalizedIngredients.length === 1) {
+          // Enough exact matches OR single ingredient search - use only exact matches
+          filteredVideos = exactMatches;
+        } else if (exactMatches.length > 0) {
+          // Some exact matches but not enough - prioritize them, add partial matches
+          const partialMatches = analyzedVideosUnfiltered.filter(
+            (video) => video.relevanceScore >= 0.5 && video.relevanceScore < 1.0
+          );
+          filteredVideos = [...exactMatches, ...partialMatches];
+        } else {
+          // No exact matches - fall back to partial matches (50%+ relevance)
+          const partialMatches = analyzedVideosUnfiltered.filter(
+            (video) => video.relevanceScore >= 0.5
+          );
+
+          if (partialMatches.length > 0) {
+            filteredVideos = partialMatches;
+            lowRelevanceFallback = true;
+          } else if (analyzedVideosUnfiltered.length > 0) {
+            // Last resort: Show any matches but limit to top 6
+            filteredVideos = analyzedVideosUnfiltered.slice(0, 6);
+            lowRelevanceFallback = true;
+          }
         }
 
-        // Sort by relevance score
-        analyzedVideos.sort((a, b) => b.relevanceScore - a.relevanceScore);
-
-        // Limit fallback results to top 6 to avoid too many low-relevance results
-        if (lowRelevanceFallback) {
-          analyzedVideos = analyzedVideos.slice(0, 6);
-        }
+        // Remove internal matchingCount field and sort by relevance
+        let analyzedVideos = filteredVideos
+          .map(({ matchingCount, ...video }) => video)
+          .sort((a, b) => b.relevanceScore - a.relevanceScore);
 
         // 2. Check cache for YouTube results
         let youtubeVideos = getCachedSearch(normalizedIngredients);
@@ -290,12 +300,17 @@ export const searchRouter = t.router({
           }
         }
 
-        // Filter fresh videos by tag if tag filters are active
-        const filteredFreshVideos = normalizedTags.length > 0
-          ? freshAnalyzedVideos.filter(video =>
-              video.tags.some(t => normalizedTags.includes(t.tag))
-            )
-          : freshAnalyzedVideos;
+        // Filter fresh videos by relevance (must have at least one matching ingredient)
+        // and by tag if tag filters are active
+        let filteredFreshVideos = freshAnalyzedVideos.filter(
+          video => video.relevanceScore > 0
+        );
+
+        if (normalizedTags.length > 0) {
+          filteredFreshVideos = filteredFreshVideos.filter(video =>
+            video.tags.some(t => normalizedTags.includes(t.tag))
+          );
+        }
 
         // Merge fresh analyzed videos with existing analyzed videos
         const allAnalyzedVideos = [...filteredFreshVideos, ...analyzedVideos];

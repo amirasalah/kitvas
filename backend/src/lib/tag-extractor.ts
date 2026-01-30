@@ -69,6 +69,13 @@ const CUISINE_KEYWORDS: Record<string, string[]> = {
   'spanish': ['spanish', 'paella', 'tapas', 'gazpacho'],
   'ethiopian': ['ethiopian', 'injera', 'berbere'],
   'caribbean': ['caribbean', 'jerk', 'jamaican'],
+  'filipino': ['filipino', 'pinoy', 'adobo', 'sinigang', 'lechon', 'lumpia', 'pancit', 'kare-kare', 'kare kare', 'sisig', 'banana ketchup', 'tocino', 'longganisa', 'tinola', 'caldereta'],
+  'indonesian': ['indonesian', 'nasi goreng', 'satay', 'rendang', 'gado-gado', 'gado gado', 'sambal'],
+  'malaysian': ['malaysian', 'laksa', 'nasi lemak', 'char kway teow'],
+  'singaporean': ['singaporean', 'hainanese', 'chili crab'],
+  'brazilian': ['brazilian', 'feijoada', 'churrasco', 'picanha', 'pão de queijo'],
+  'peruvian': ['peruvian', 'ceviche', 'lomo saltado', 'anticucho'],
+  'moroccan': ['moroccan', 'tagine', 'couscous', 'harira'],
 };
 
 // Build set of all valid tags for LLM validation
@@ -152,7 +159,7 @@ export async function extractTagsWithLLM(
 
 1. cooking_method: How the food is cooked (e.g., "air fryer", "oven", "stovetop", "grill", "slow cooker", "instant pot", "no cook", "one pot", "steamed", "smoked", "sous vide", "deep fry", "microwave")
 2. dietary: Dietary classifications (e.g., "vegan", "vegetarian", "gluten-free", "dairy-free", "keto", "paleo", "high protein", "low calorie", "sugar-free")
-3. cuisine: Cuisine type (e.g., "korean", "japanese", "chinese", "thai", "indian", "italian", "mexican", "mediterranean", "french", "american", "vietnamese", "greek")
+3. cuisine: Cuisine type (e.g., "korean", "japanese", "chinese", "thai", "indian", "italian", "mexican", "mediterranean", "french", "american", "vietnamese", "greek", "filipino", "indonesian", "malaysian", "brazilian", "peruvian", "moroccan")
 
 Return ONLY a JSON array. Each item: {"tag": "lowercase tag", "category": "cooking_method"|"dietary"|"cuisine"}.
 Only include tags clearly indicated in the text. Do not guess.`
