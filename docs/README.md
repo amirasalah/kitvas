@@ -1,6 +1,24 @@
-# Kitvas V1
+# Kitvas
 
-The intelligence platform for food content creators.
+**Intelligence platform for food content creators.**
+
+Kitvas helps recipe video creators discover content opportunities, understand market demand, and find underserved ingredient combinations that YouTube can't show you.
+
+## What Makes Kitvas Different
+
+While YouTube shows you what already exists, Kitvas shows you what's **missing**:
+
+- **Demand Signals**: See actual view counts, market saturation, and content gaps for any ingredient combination
+- **Content Opportunities**: Discover ingredient combinations with high search demand but low video supply
+- **Ingredient Gap Finder**: "Others searched lamb + rice + sumac (47 searches, only 2 videos)" — that's your opportunity
+
+### The Moat
+
+Kitvas builds proprietary data assets that compound over time:
+
+1. **Search Patterns**: Aggregated search behavior reveals what creators want to make
+2. **User Corrections**: Crowdsourced ingredient corrections improve AI accuracy
+3. **Outcome Tracking**: Real performance data calibrates opportunity predictions
 
 ## Project Structure
 
@@ -99,7 +117,8 @@ See `SETUP.md` for more details.
 - **Dynamic Blocklist**: User corrections automatically improve extraction accuracy
 
 ### User Features (Moat)
-- **Correction System**: Click ingredients to correct detection errors (moat feature)
+- **Ingredient Gap Finder**: Shows underserved ingredient combinations based on aggregated search patterns — what YouTube can't show
+- **Correction System**: Click ingredients to correct detection errors, improving AI accuracy for everyone
 - **Opportunity Tracking**: Track and manage content ideas through your pipeline
 - **Outcome Reporting**: Report video performance to calibrate prediction accuracy
 
