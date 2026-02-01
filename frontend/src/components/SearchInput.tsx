@@ -77,12 +77,12 @@ export function SearchInput({
             {ingredients.map((ingredient, index) => (
               <span
                 key={index}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#FFF5F3] text-[#FF6B5B] rounded-lg text-sm font-medium border border-[#FF6B5B]/20"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#ECFDF5] text-[#10B981] rounded-lg text-sm font-medium border border-[#10B981]/20"
               >
                 {ingredient}
                 <button
                   onClick={() => removeIngredient(index)}
-                  className="ml-0.5 text-[#FF6B5B]/60 hover:text-[#FF6B5B] transition-colors"
+                  className="ml-0.5 text-[#10B981]/60 hover:text-[#10B981] transition-colors"
                   aria-label={`Remove ${ingredient}`}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -119,7 +119,7 @@ export function SearchInput({
               onClick={() => setShowFilters(!showFilters)}
               className={`p-2.5 rounded-xl transition-all ${
                 showFilters || tags.length > 0
-                  ? 'bg-[#FF6B5B] text-white'
+                  ? 'bg-[#10B981] text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -170,7 +170,7 @@ export function SearchInput({
             {tags.length > 0 && (
               <button
                 onClick={() => onTagsChange([])}
-                className="text-sm text-[#FF6B5B] hover:underline"
+                className="text-sm text-[#10B981] hover:underline"
               >
                 Clear all filters
               </button>

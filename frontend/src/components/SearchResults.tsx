@@ -285,7 +285,7 @@ function VideoCard({ video }: { video: VideoResult }) {
           href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="block group-hover:text-[#FF6B5B] transition-colors"
+          className="block group-hover:text-[#10B981] transition-colors"
         >
           <h3 className="font-semibold text-gray-900 line-clamp-2 mb-2">{video.title}</h3>
         </a>
@@ -310,7 +310,7 @@ function VideoCard({ video }: { video: VideoResult }) {
             {video.ingredients.length > 5 && (
               <button
                 onClick={() => setShowAllIngredients(!showAllIngredients)}
-                className="text-xs text-[#FF6B5B] hover:underline"
+                className="text-xs text-[#10B981] hover:underline"
               >
                 {showAllIngredients ? 'Show less' : `+${video.ingredients.length - 5} more`}
               </button>
@@ -376,7 +376,7 @@ function YouTubeVideoCard({ video }: { video: YouTubeVideoResult }) {
           href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="block group-hover:text-[#FF6B5B] transition-colors"
+          className="block group-hover:text-[#10B981] transition-colors"
         >
           <h3 className="font-semibold text-gray-900 line-clamp-2 mb-2">{video.title}</h3>
         </a>

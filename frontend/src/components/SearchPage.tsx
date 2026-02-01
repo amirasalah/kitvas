@@ -30,13 +30,13 @@ export function SearchPage() {
           <div className={`text-center transition-all duration-500 ${hasSearched ? 'mb-6' : 'mb-12'}`}>
             {!hasSearched && (
               <>
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/80 rounded-full text-sm font-medium text-[#FF6B5B] mb-6 shadow-sm">
-                  <span className="w-2 h-2 rounded-full bg-[#FF6B5B] animate-pulse"></span>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/80 rounded-full text-sm font-medium text-[#10B981] mb-6 shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse"></span>
                   Intelligence for Food Creators
                 </div>
                 <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4 leading-tight">
                   Discover Recipe<br />
-                  <span className="text-[#FF6B5B]">Opportunities</span>
+                  <span className="text-[#10B981]">Opportunities</span>
                 </h1>
                 <p className="text-lg text-gray-600 max-w-2xl mx-auto">
                   Search by ingredients to find content gaps, understand market demand,
@@ -77,7 +77,7 @@ export function SearchPage() {
       <section className="max-w-7xl mx-auto px-6 lg:px-8 py-8">
         {searchQuery.isLoading && (
           <div className="flex flex-col items-center justify-center py-16">
-            <div className="w-12 h-12 rounded-full border-4 border-gray-200 border-t-[#FF6B5B] animate-spin mb-4"></div>
+            <div className="w-12 h-12 rounded-full border-4 border-gray-200 border-t-[#10B981] animate-spin mb-4"></div>
             <p className="text-gray-500 font-medium">Analyzing ingredients...</p>
           </div>
         )}

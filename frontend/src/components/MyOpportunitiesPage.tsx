@@ -24,9 +24,14 @@ export function MyOpportunitiesPage() {
 
   if (opportunitiesQuery.isLoading) {
     return (
-      <div className="min-h-screen p-8">
-        <div className="max-w-4xl mx-auto">
-          <p className="text-gray-500">Loading your opportunities...</p>
+      <div className="min-h-screen">
+        <div className="gradient-hero py-12">
+          <div className="max-w-5xl mx-auto px-6 lg:px-8">
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="w-12 h-12 rounded-full border-4 border-gray-200 border-t-[#10B981] animate-spin mb-4"></div>
+              <p className="text-gray-500 font-medium">Loading your opportunities...</p>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -47,68 +52,127 @@ export function MyOpportunitiesPage() {
   )
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-4xl mx-auto">
-        <header className="mb-8">
+    <div className="min-h-screen">
+      {/* Hero Header */}
+      <section className="gradient-hero py-12">
+        <div className="max-w-5xl mx-auto px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold mb-2">My Opportunities</h1>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/80 rounded-full text-sm font-medium text-[#10B981] mb-4 shadow-sm">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Track Your Ideas
+              </div>
+              <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+                My Opportunities
+              </h1>
               <p className="text-gray-600">
                 Track your recipe ideas from research to published
               </p>
             </div>
             <Link
               href="/"
-              className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded"
+              className="btn-secondary text-sm"
             >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
               Back to Search
             </Link>
           </div>
-        </header>
+        </div>
+      </section>
 
-        {/* Limit indicator for free users */}
+      {/* Main Content */}
+      <section className="max-w-5xl mx-auto px-6 lg:px-8 py-8">
+        {/* Limit indicator */}
         {limit && (
           <div
-            className={`mb-6 p-3 rounded-lg ${
-              isAtLimit ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50'
+            className={`mb-6 p-4 rounded-2xl border ${
+              isAtLimit
+                ? 'bg-amber-50 border-amber-200'
+                : 'bg-white border-gray-100 shadow-sm'
             }`}
           >
-            <p className="text-sm">
-              <span className="font-medium">Active opportunities:</span>{' '}
-              {activeCount} / {limit}
-              {isAtLimit && (
-                <span className="text-yellow-700 ml-2">
-                  (Limit reached. Complete or remove one to track more.)
-                </span>
-              )}
-            </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isAtLimit ? 'bg-amber-100' : 'bg-[#ECFDF5]'}`}>
+                  <svg className={`w-5 h-5 ${isAtLimit ? 'text-amber-600' : 'text-[#10B981]'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">Active Opportunities</p>
+                  <p className="text-sm text-gray-500">
+                    {activeCount} of {limit} slots used
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${isAtLimit ? 'bg-amber-500' : 'bg-[#10B981]'}`}
+                    style={{ width: `${(activeCount / limit) * 100}%` }}
+                  />
+                </div>
+                {isAtLimit && (
+                  <span className="text-xs text-amber-700 font-medium">
+                    Limit reached
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
         {/* Pending outcomes alert */}
         {pendingOutcomesQuery.data && pendingOutcomesQuery.data.count > 0 && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="font-medium text-blue-800">
-              You have {pendingOutcomesQuery.data.count} opportunit
-              {pendingOutcomesQuery.data.count === 1 ? 'y' : 'ies'} ready for
-              outcome reporting!
-            </p>
-            <p className="text-sm text-blue-600 mt-1">
-              Report how your videos performed to help calibrate recommendations.
-            </p>
+          <div className="mb-6 p-4 bg-[#ECFDF5] border border-[#10B981]/20 rounded-2xl">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#10B981] flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900">
+                  You have {pendingOutcomesQuery.data.count} opportunit
+                  {pendingOutcomesQuery.data.count === 1 ? 'y' : 'ies'} ready for outcome reporting!
+                </p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Report how your videos performed to help calibrate recommendations.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
         {/* Active opportunities */}
         <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">
-            Active ({active.length})
-          </h2>
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Active</h2>
+            <span className="px-2.5 py-1 text-sm font-medium bg-[#ECFDF5] text-[#10B981] rounded-lg">
+              {active.length}
+            </span>
+          </div>
           {active.length === 0 ? (
-            <p className="text-gray-500 text-sm">
-              No active opportunities. Search for ingredients to find and track
-              opportunities.
-            </p>
+            <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <p className="text-gray-600 mb-4">
+                No active opportunities yet.
+              </p>
+              <Link href="/" className="btn-primary text-sm">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                Search for Opportunities
+              </Link>
+            </div>
           ) : (
             <div className="space-y-3">
               {active.map((opp) => (
@@ -134,9 +198,12 @@ export function MyOpportunitiesPage() {
         {/* Completed opportunities */}
         {completed.length > 0 && (
           <section>
-            <h2 className="text-xl font-semibold mb-4">
-              Completed ({completed.length})
-            </h2>
+            <div className="flex items-center gap-3 mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Completed</h2>
+              <span className="px-2.5 py-1 text-sm font-medium bg-gray-100 text-gray-600 rounded-lg">
+                {completed.length}
+              </span>
+            </div>
             <div className="space-y-3">
               {completed.map((opp) => (
                 <OpportunityCard
@@ -160,7 +227,7 @@ export function MyOpportunitiesPage() {
             </div>
           </section>
         )}
-      </div>
+      </section>
     </div>
   )
 }
@@ -187,17 +254,48 @@ function OpportunityCard({
 }) {
   const [showOutcomeForm, setShowOutcomeForm] = useState(false)
 
-  const scoreColors = {
-    high: 'bg-green-100 text-green-800 border-green-200',
-    medium: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    low: 'bg-gray-100 text-gray-600 border-gray-200',
+  const scoreConfig = {
+    high: {
+      bg: 'bg-[#ECFDF5]',
+      text: 'text-[#10B981]',
+      border: 'border-[#10B981]/20',
+      icon: '🔥',
+    },
+    medium: {
+      bg: 'bg-amber-50',
+      text: 'text-amber-700',
+      border: 'border-amber-200',
+      icon: '⚡',
+    },
+    low: {
+      bg: 'bg-gray-100',
+      text: 'text-gray-600',
+      border: 'border-gray-200',
+      icon: '💡',
+    },
   }
 
-  const statusColors = {
-    researching: 'bg-blue-100 text-blue-800',
-    filming: 'bg-purple-100 text-purple-800',
-    published: 'bg-green-100 text-green-800',
-    abandoned: 'bg-gray-100 text-gray-500',
+  const statusConfig = {
+    researching: {
+      bg: 'bg-blue-50',
+      text: 'text-blue-700',
+      label: 'Researching',
+    },
+    filming: {
+      bg: 'bg-purple-50',
+      text: 'text-purple-700',
+      label: 'Filming',
+    },
+    published: {
+      bg: 'bg-[#ECFDF5]',
+      text: 'text-[#10B981]',
+      label: 'Published',
+    },
+    abandoned: {
+      bg: 'bg-gray-100',
+      text: 'text-gray-500',
+      label: 'Abandoned',
+    },
   }
 
   const nextStatus: Record<string, OpportunityStatus | null> = {
@@ -207,78 +305,89 @@ function OpportunityCard({
     abandoned: null,
   }
 
+  const score = scoreConfig[opportunity.opportunityScore as keyof typeof scoreConfig] || scoreConfig.low
+  const status = statusConfig[opportunity.status as keyof typeof statusConfig] || statusConfig.researching
+
   return (
-    <div className="p-4 border rounded-lg bg-white">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          {/* Ingredients */}
-          <div className="flex flex-wrap gap-1 mb-2">
-            {opportunity.ingredients.map((ing, i) => (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            {/* Ingredients */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {opportunity.ingredients.map((ing, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center px-3 py-1.5 bg-[#ECFDF5] text-[#10B981] rounded-lg text-sm font-medium border border-[#10B981]/20"
+                >
+                  {ing}
+                </span>
+              ))}
+            </div>
+
+            {/* Meta info */}
+            <div className="flex items-center gap-3 text-sm">
               <span
-                key={i}
-                className="px-2 py-0.5 bg-gray-100 text-gray-700 text-sm rounded"
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${score.bg} ${score.text} ${score.border}`}
               >
-                {ing}
+                <span>{score.icon}</span>
+                {opportunity.opportunityScore.charAt(0).toUpperCase() + opportunity.opportunityScore.slice(1)}
               </span>
-            ))}
+              <span
+                className={`px-2.5 py-1 rounded-lg ${status.bg} ${status.text}`}
+              >
+                {status.label}
+              </span>
+              <span className="text-gray-400">
+                Tracked {formatDate(opportunity.trackedAt)}
+              </span>
+            </div>
           </div>
 
-          {/* Meta info */}
-          <div className="flex items-center gap-2 text-sm">
-            <span
-              className={`px-2 py-0.5 rounded border ${
-                scoreColors[opportunity.opportunityScore as keyof typeof scoreColors] ||
-                scoreColors.low
-              }`}
-            >
-              {opportunity.opportunityScore.toUpperCase()}
-            </span>
-            <span
-              className={`px-2 py-0.5 rounded ${
-                statusColors[opportunity.status as keyof typeof statusColors] ||
-                statusColors.researching
-              }`}
-            >
-              {opportunity.status}
-            </span>
-            <span className="text-gray-400">
-              Tracked {formatDate(opportunity.trackedAt)}
-            </span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          {nextStatus[opportunity.status] && (
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            {nextStatus[opportunity.status] && (
+              <button
+                onClick={() => onUpdateStatus(nextStatus[opportunity.status]!)}
+                disabled={isUpdating}
+                className="btn-primary text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+                Mark as {nextStatus[opportunity.status]}
+              </button>
+            )}
+            {showOutcomeButton && (
+              <button
+                onClick={() => setShowOutcomeForm(true)}
+                className="btn-primary text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Report Outcome
+              </button>
+            )}
+            {opportunity.hasOutcome && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-[#ECFDF5] text-[#10B981] rounded-lg">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Outcome reported
+              </span>
+            )}
             <button
-              onClick={() => onUpdateStatus(nextStatus[opportunity.status]!)}
+              onClick={onDelete}
               disabled={isUpdating}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="Remove from tracking"
             >
-              Mark as {nextStatus[opportunity.status]}
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
             </button>
-          )}
-          {showOutcomeButton && (
-            <button
-              onClick={() => setShowOutcomeForm(true)}
-              className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-            >
-              Report Outcome
-            </button>
-          )}
-          {opportunity.hasOutcome && (
-            <span className="px-2 py-1 text-xs bg-green-50 text-green-700 rounded">
-              Outcome reported
-            </span>
-          )}
-          <button
-            onClick={onDelete}
-            disabled={isUpdating}
-            className="px-2 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
-            title="Remove from tracking"
-          >
-            Remove
-          </button>
+          </div>
         </div>
       </div>
 
@@ -326,24 +435,23 @@ function OutcomeForm({
   }
 
   return (
-    <div className="mt-4 p-4 border-t bg-gray-50 rounded-b-lg">
-      <h4 className="font-medium mb-3">Report Outcome</h4>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={didNotPublish}
-              onChange={(e) => setDidNotPublish(e.target.checked)}
-            />
-            I decided not to publish this video
-          </label>
-        </div>
+    <div className="border-t border-gray-100 bg-gray-50 rounded-b-2xl p-5">
+      <h4 className="font-semibold text-gray-900 mb-4">Report Outcome</h4>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <label className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 cursor-pointer hover:border-[#10B981] transition-colors">
+          <input
+            type="checkbox"
+            checked={didNotPublish}
+            onChange={(e) => setDidNotPublish(e.target.checked)}
+            className="w-4 h-4 text-[#10B981] border-gray-300 rounded focus:ring-[#10B981]"
+          />
+          <span className="text-sm text-gray-700">I decided not to publish this video</span>
+        </label>
 
         {!didNotPublish && (
           <>
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 YouTube URL (optional)
               </label>
               <input
@@ -351,12 +459,12 @@ function OutcomeForm({
                 value={videoUrl}
                 onChange={(e) => setVideoUrl(e.target.value)}
                 placeholder="https://youtube.com/watch?v=..."
-                className="w-full px-3 py-2 border rounded text-sm"
+                className="input-modern"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 First 7-day views (optional)
               </label>
               <input
@@ -365,12 +473,12 @@ function OutcomeForm({
                 onChange={(e) => setViews7day(e.target.value)}
                 placeholder="e.g., 5000"
                 min="0"
-                className="w-full px-3 py-2 border rounded text-sm"
+                className="input-modern"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 How would you rate this opportunity?
               </label>
               <div className="flex gap-2">
@@ -379,44 +487,58 @@ function OutcomeForm({
                     key={n}
                     type="button"
                     onClick={() => setRating(n)}
-                    className={`w-10 h-10 rounded ${
+                    className={`w-12 h-12 rounded-xl font-semibold transition-all duration-200 ${
                       rating === n
-                        ? 'bg-yellow-400 text-white'
-                        : 'bg-gray-100 hover:bg-gray-200'
+                        ? 'bg-[#10B981] text-white shadow-md scale-105'
+                        : 'bg-white border border-gray-200 text-gray-600 hover:border-[#10B981] hover:text-[#10B981]'
                     }`}
                   >
                     {n}
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-2">
                 1 = Poor opportunity, 5 = Great opportunity
               </p>
             </div>
           </>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex gap-3 pt-2">
           <button
             type="submit"
             disabled={submitMutation.isPending}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+            className="btn-primary"
           >
-            {submitMutation.isPending ? 'Submitting...' : 'Submit Outcome'}
+            {submitMutation.isPending ? (
+              <>
+                <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
+                Submitting...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Submit Outcome
+              </>
+            )}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+            className="btn-secondary"
           >
             Cancel
           </button>
         </div>
 
         {submitMutation.error && (
-          <p className="text-sm text-red-600">
-            Error: {submitMutation.error.message}
-          </p>
+          <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
+            <p className="text-sm text-red-600">
+              Error: {submitMutation.error.message}
+            </p>
+          </div>
         )}
       </form>
     </div>

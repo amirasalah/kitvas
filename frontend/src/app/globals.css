@@ -3,10 +3,10 @@
 @tailwind utilities;
 
 :root {
-  /* Primary - Coral/Orange accent */
-  --color-primary: #FF6B5B;
-  --color-primary-hover: #EB5747;
-  --color-primary-light: #FFF5F3;
+  /* Primary - Green accent */
+  --color-primary: #10B981;
+  --color-primary-hover: #059669;
+  --color-primary-light: #ECFDF5;
 
   /* Secondary - Deep Blue */
   --color-secondary: #2D3748;
@@ -52,7 +52,7 @@ body {
 /* Gradient backgrounds */
 @layer utilities {
   .gradient-hero {
-    background: linear-gradient(135deg, #FFF5F3 0%, #FEF3F2 50%, #FDF2F8 100%);
+    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 50%, #F0FDF4 100%);
   }
 
   .gradient-card {
@@ -105,7 +105,7 @@ body {
 
 /* Focus states */
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF6B5B];
+  @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#10B981];
 }
 
 /* Button base styles */
@@ -114,7 +114,7 @@ body {
 }
 
 .btn-primary {
-  @apply btn bg-[#FF6B5B] text-white hover:bg-[#EB5747] active:scale-[0.98] shadow-md hover:shadow-lg;
+  @apply btn bg-[#10B981] text-white hover:bg-[#059669] active:scale-[0.98] shadow-md hover:shadow-lg;
 }
 
 .btn-secondary {
@@ -127,7 +127,7 @@ body {
 
 /* Input styles */
 .input-modern {
-  @apply w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#FF6B5B]/20 focus:border-[#FF6B5B];
+  @apply w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#10B981]/20 focus:border-[#10B981];
 }
 
 /* Tag/Chip styles */
@@ -136,7 +136,7 @@ body {
 }
 
 .chip-primary {
-  @apply chip bg-[#FFF5F3] text-[#FF6B5B] border border-[#FF6B5B]/20;
+  @apply chip bg-[#ECFDF5] text-[#10B981] border border-[#10B981]/20;
 }
 
 .chip-secondary {
