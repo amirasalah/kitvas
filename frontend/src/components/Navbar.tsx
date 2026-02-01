@@ -8,23 +8,8 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-[#10B981] flex items-center justify-center">
-              <svg
-                className="w-5 h-5 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
-            <span className="text-xl font-bold text-gray-900">Kitvas</span>
+          <Link href="/" className="flex items-center">
+            <span className="text-2xl bitcount-logo text-gray-900">Kitvas</span>
           </Link>
 
           {/* Navigation */}
@@ -44,6 +29,15 @@ export function Navbar() {
               </svg>
               Opportunities
             </Link>
+            <a
+              href={process.env.NEXT_PUBLIC_STRIPE_COFFEE_LINK || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 hover:scale-105"
+            >
+              <span className="text-lg">☕</span>
+              Buy me a coffee
+            </a>
           </div>
         </div>
       </div>

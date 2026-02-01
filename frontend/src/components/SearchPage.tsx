@@ -38,7 +38,7 @@ export function SearchPage() {
                   <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse"></span>
                   Intelligence for Food Creators
                 </div>
-                <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4 leading-tight">
+                <h1 className="text-4xl lg:text-5xl bitcount-logo text-gray-900 mb-4 leading-tight">
                   Discover Recipe<br />
                   <span className="text-[#10B981]">Opportunities</span>
                 </h1>
@@ -47,11 +47,6 @@ export function SearchPage() {
                   and discover what your audience wants to see.
                 </p>
               </>
-            )}
-            {hasSearched && (
-              <h1 className="text-2xl font-bold text-gray-900">
-                Search Results
-              </h1>
             )}
           </div>
 
@@ -77,7 +72,8 @@ export function SearchPage() {
         </div>
       </section>
 
-      {/* Results Section */}
+      {/* Results Section - only show when searching or has results */}
+      {hasSearched && (
       <section className="max-w-7xl mx-auto px-6 lg:px-8 py-8">
         {searchQuery.isLoading && (
           <div className="flex flex-col items-center justify-center py-16">
@@ -116,6 +112,7 @@ export function SearchPage() {
           />
         )}
       </section>
+      )}
     </div>
   )
 }

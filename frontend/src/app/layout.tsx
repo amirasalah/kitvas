@@ -9,9 +9,6 @@ export const metadata: Metadata = {
   description: 'Find recipe opportunities with ingredient-level intelligence',
 }
 
-// Replace with your Stripe Payment Link
-const STRIPE_COFFEE_LINK = process.env.NEXT_PUBLIC_STRIPE_COFFEE_LINK || '#'
-
 export default function RootLayout({
   children,
 }: {
@@ -23,7 +20,7 @@ export default function RootLayout({
         <Providers>
           <Navbar />
           <main className="flex-1">{children}</main>
-          <CoffeeFooter stripeLink={STRIPE_COFFEE_LINK} />
+          <CoffeeFooter />
         </Providers>
       </body>
     </html>
