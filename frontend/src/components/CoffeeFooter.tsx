@@ -6,7 +6,7 @@ interface CoffeeFooterProps {
 
 export function CoffeeFooter({ stripeLink = '#' }: CoffeeFooterProps) {
   return (
-    <footer className="border-t border-gray-100 bg-gray-50/50">
+    <footer className="backdrop-blur-sm bg-white/5">
       <div className="max-w-7xl mx-auto px-6 lg:px-8 py-4">
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm text-gray-500">

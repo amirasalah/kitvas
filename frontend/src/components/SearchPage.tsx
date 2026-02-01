@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { trpc } from '@/app/providers'
 import { SearchInput } from './SearchInput'
 import { SearchResults } from './SearchResults'
+import { HeroFoodDecorations } from './FoodIllustrations'
 
 export function SearchPage() {
   const [ingredients, setIngredients] = useState<string[]>([])
@@ -24,8 +25,11 @@ export function SearchPage() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className={`gradient-hero transition-all duration-500 ${hasSearched ? 'py-8' : 'py-16 lg:py-24'}`}>
-        <div className="max-w-5xl mx-auto px-6 lg:px-8">
+      <section className={`gradient-hero transition-all duration-500 relative overflow-hidden ${hasSearched ? 'py-8' : 'py-16 lg:py-24'}`}>
+        {/* Floating Food Illustrations */}
+        {!hasSearched && <HeroFoodDecorations />}
+
+        <div className="max-w-5xl mx-auto px-6 lg:px-8 relative z-10">
           {/* Hero Content */}
           <div className={`text-center transition-all duration-500 ${hasSearched ? 'mb-6' : 'mb-12'}`}>
             {!hasSearched && (
