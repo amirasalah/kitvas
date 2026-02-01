@@ -3,25 +3,160 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
+  /* Primary - Coral/Orange accent */
+  --color-primary: #FF6B5B;
+  --color-primary-hover: #EB5747;
+  --color-primary-light: #FFF5F3;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+  /* Secondary - Deep Blue */
+  --color-secondary: #2D3748;
+  --color-secondary-light: #4A5568;
+
+  /* Accent - Purple for opportunities */
+  --color-accent: #7C3AED;
+  --color-accent-light: #EDE9FE;
+
+  /* Neutrals */
+  --color-background: #FFFFFF;
+  --color-surface: #F9FAFB;
+  --color-border: #E5E7EB;
+  --color-text: #111827;
+  --color-text-muted: #6B7280;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  color: var(--color-text);
+  background: var(--color-background);
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Gradient backgrounds */
+@layer utilities {
+  .gradient-hero {
+    background: linear-gradient(135deg, #FFF5F3 0%, #FEF3F2 50%, #FDF2F8 100%);
+  }
+
+  .gradient-card {
+    background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+  }
+}
+
+/* Animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+  }
+
+  .animate-pulse-soft {
+    animation: pulse-soft 2s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+/* Card shadow utilities - wrapped in @layer for @apply compatibility */
+@layer utilities {
+  .shadow-card {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+
+  .shadow-card-hover {
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  }
+}
+
+/* Focus states */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF6B5B];
+}
+
+/* Button base styles */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all duration-200;
+}
+
+.btn-primary {
+  @apply btn bg-[#FF6B5B] text-white hover:bg-[#EB5747] active:scale-[0.98] shadow-md hover:shadow-lg;
+}
+
+.btn-secondary {
+  @apply btn bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300;
+}
+
+.btn-ghost {
+  @apply btn text-gray-500 hover:text-gray-900 hover:bg-gray-100;
+}
+
+/* Input styles */
+.input-modern {
+  @apply w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#FF6B5B]/20 focus:border-[#FF6B5B];
+}
+
+/* Tag/Chip styles */
+.chip {
+  @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200;
+}
+
+.chip-primary {
+  @apply chip bg-[#FFF5F3] text-[#FF6B5B] border border-[#FF6B5B]/20;
+}
+
+.chip-secondary {
+  @apply chip bg-gray-100 text-gray-600;
+}
+
+/* Card styles */
+.card {
+  @apply bg-white rounded-2xl border border-gray-100 shadow-card transition-all duration-300;
+}
+
+.card-hover {
+  @apply hover:shadow-card-hover hover:border-gray-200 hover:-translate-y-0.5;
+}
+
+/* Section title styles */
+.section-title {
+  @apply text-2xl font-bold text-gray-900;
+}
+
+.section-subtitle {
+  @apply text-gray-500 mt-1;
 }
