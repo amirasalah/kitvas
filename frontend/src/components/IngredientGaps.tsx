@@ -5,9 +5,10 @@ import { trpc } from '@/app/providers';
 interface IngredientGapsProps {
   ingredients: string[];
   onAddIngredient?: (ingredient: string) => void;
+  showContent?: boolean;
 }
 
-export function IngredientGaps({ ingredients, onAddIngredient }: IngredientGapsProps) {
+export function IngredientGaps({ ingredients, onAddIngredient, showContent = false }: IngredientGapsProps) {
   const { data, isLoading } = trpc.gaps.findGaps.useQuery(
     { ingredients },
     { enabled: ingredients.length >= 1 }
@@ -30,6 +31,10 @@ export function IngredientGaps({ ingredients, onAddIngredient }: IngredientGapsP
   }
 
   if (!data || data.gaps.length === 0) return null;
+
+  // If not showing content (user not logged in), don't render anything
+  // The parent component handles the blurred preview
+  if (!showContent) return null;
 
   const sourceLabel = data.source === 'search_patterns'
     ? `Based on ${data.totalSearches} related searches`
