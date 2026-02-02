@@ -38,6 +38,32 @@ export function MyOpportunitiesPage() {
     )
   }
 
+  if (opportunitiesQuery.error) {
+    return (
+      <div className="min-h-screen">
+        <div className="gradient-hero py-12">
+          <div className="max-w-5xl mx-auto px-6 lg:px-8">
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-gray-700 font-medium mb-2">Unable to load opportunities</p>
+              <p className="text-gray-500 text-sm mb-4">Please try again later</p>
+              <button
+                onClick={() => opportunitiesQuery.refetch()}
+                className="btn-primary text-sm"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const { opportunities, activeCount, limit, isAtLimit } = opportunitiesQuery.data || {
     opportunities: [],
     activeCount: 0,
@@ -308,7 +334,7 @@ function OpportunityCard({
   const status = statusConfig[opportunity.status as keyof typeof statusConfig] || statusConfig.researching
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md active:shadow-md transition-all duration-300">
       <div className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
@@ -379,7 +405,7 @@ function OpportunityCard({
             <button
               onClick={onDelete}
               disabled={isUpdating}
-              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 active:text-red-500 active:bg-red-50 rounded-lg transition-colors"
               title="Remove from tracking"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

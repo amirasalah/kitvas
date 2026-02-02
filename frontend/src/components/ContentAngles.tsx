@@ -10,10 +10,23 @@ export function ContentAngles({ ingredients }: ContentAnglesProps) {
   // Use the first ingredient for related angles lookup
   const primaryIngredient = ingredients[0];
 
-  const { data, isLoading } = trpc.analytics.relatedAngles.useQuery(
+  const { data, isLoading, error } = trpc.analytics.relatedAngles.useQuery(
     { ingredient: primaryIngredient, limit: 5 },
     { enabled: !!primaryIngredient }
   );
+
+  if (error) {
+    return (
+      <div className="bg-red-50 rounded-2xl border border-red-100 p-5">
+        <div className="flex items-center gap-3 text-red-600">
+          <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-sm">Unable to load content angles</span>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -50,7 +63,7 @@ export function ContentAngles({ ingredients }: ContentAnglesProps) {
         {data.contentAngles.map((angle, index) => (
           <div
             key={angle.query}
-            className="flex items-center justify-between p-3 bg-white rounded-xl border border-blue-100 hover:border-blue-200 transition-colors"
+            className="flex items-center justify-between p-3 bg-white rounded-xl border border-blue-100 hover:border-blue-200 active:border-blue-200 transition-colors"
           >
             <div className="flex-1">
               <div className="flex items-center gap-2">

@@ -428,9 +428,9 @@ function VideoCard({ video }: { video: VideoResult }) {
         <img
           src={video.thumbnailUrl}
           alt={video.title}
-          className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300"
+          className="w-full h-44 object-cover group-hover:scale-105 group-active:scale-105 transition-transform duration-300"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity" />
         <div className="absolute bottom-2 right-2 bg-black/75 text-white text-xs px-2 py-1 rounded">
           {(video.relevanceScore * 100).toFixed(0)}% match
         </div>
@@ -440,7 +440,7 @@ function VideoCard({ video }: { video: VideoResult }) {
           href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="block group-hover:text-[#10B981] transition-colors"
+          className="block group-hover:text-[#10B981] group-active:text-[#10B981] transition-colors"
         >
           <h3 className="font-semibold text-gray-900 line-clamp-2 mb-2">{video.title}</h3>
         </a>
@@ -474,8 +474,19 @@ function VideoCard({ video }: { video: VideoResult }) {
         )}
 
         {correctionFeedback && (
-          <div className="mt-3 text-xs p-2 bg-blue-50 text-blue-700 rounded-lg">
-            {correctionFeedback}
+          <div className={`mt-3 text-xs p-2 rounded-lg flex items-center justify-between gap-2 ${
+            correctionFeedback.startsWith('Error') ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
+          }`}>
+            <span>{correctionFeedback}</span>
+            <button
+              onClick={() => setCorrectionFeedback(null)}
+              className="p-0.5 hover:bg-black/10 rounded transition-colors flex-shrink-0"
+              aria-label="Dismiss"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         )}
 
@@ -522,16 +533,16 @@ function YouTubeVideoCard({ video }: { video: YouTubeVideoResult }) {
         <img
           src={video.thumbnailUrl}
           alt={video.title}
-          className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300"
+          className="w-full h-44 object-cover group-hover:scale-105 group-active:scale-105 transition-transform duration-300"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity" />
       </a>
       <div className="p-4">
         <a
           href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="block group-hover:text-[#10B981] transition-colors"
+          className="block group-hover:text-[#10B981] group-active:text-[#10B981] transition-colors"
         >
           <h3 className="font-semibold text-gray-900 line-clamp-2 mb-2">{video.title}</h3>
         </a>
@@ -675,10 +686,19 @@ function OpportunityCard({
         </button>
       </div>
       {trackFeedback && (
-        <div className={`mt-3 text-xs p-2 rounded-lg ${
+        <div className={`mt-3 text-xs p-2 rounded-lg flex items-center justify-between gap-2 ${
           trackFeedback.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
         }`}>
-          {trackFeedback}
+          <span>{trackFeedback}</span>
+          <button
+            onClick={() => setTrackFeedback(null)}
+            className="p-0.5 hover:bg-black/10 rounded transition-colors flex-shrink-0"
+            aria-label="Dismiss"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
     </div>

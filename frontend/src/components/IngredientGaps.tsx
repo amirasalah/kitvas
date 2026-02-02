@@ -9,10 +9,23 @@ interface IngredientGapsProps {
 }
 
 export function IngredientGaps({ ingredients, onAddIngredient, showContent = false }: IngredientGapsProps) {
-  const { data, isLoading } = trpc.gaps.findGaps.useQuery(
+  const { data, isLoading, error } = trpc.gaps.findGaps.useQuery(
     { ingredients },
     { enabled: ingredients.length >= 1 }
   );
+
+  if (error) {
+    return (
+      <div className="bg-red-50 rounded-2xl border border-red-100 p-5">
+        <div className="flex items-center gap-3 text-red-600">
+          <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-sm">Unable to load content opportunities</span>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -59,10 +72,10 @@ export function IngredientGaps({ ingredients, onAddIngredient, showContent = fal
           <button
             key={gap.ingredient}
             onClick={() => onAddIngredient?.(gap.ingredient)}
-            className={`group px-4 py-2.5 bg-white rounded-xl border shadow-sm hover:shadow-md transition-all cursor-pointer text-left ${
+            className={`group px-4 py-2.5 bg-white rounded-xl border shadow-sm hover:shadow-md active:shadow-md transition-all cursor-pointer text-left ${
               gap.isBreakout
-                ? 'border-red-300 ring-2 ring-red-100 hover:border-red-400'
-                : 'border-purple-200 hover:border-purple-400'
+                ? 'border-red-300 ring-2 ring-red-100 hover:border-red-400 active:border-red-400'
+                : 'border-purple-200 hover:border-purple-400 active:border-purple-400'
             }`}
             title={`Add "${gap.ingredient}" to search`}
           >

@@ -172,7 +172,7 @@ function IngredientRow({
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group text-left"
+      className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 active:bg-gray-50 transition-colors group text-left"
     >
       {/* Rank */}
       <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${rankColor}`}>
@@ -180,7 +180,7 @@ function IngredientRow({
       </span>
 
       {/* Name */}
-      <span className="flex-1 font-medium text-gray-900 group-hover:text-[#10B981] transition-colors capitalize">
+      <span className="flex-1 font-medium text-gray-900 group-hover:text-[#10B981] group-active:text-[#10B981] transition-colors capitalize">
         {name}
       </span>
 
