@@ -11,6 +11,7 @@ While YouTube shows you what already exists, Kitvas shows you what's **missing**
 - **Demand Signals**: See actual view counts, market saturation, and content gaps for any ingredient combination
 - **Content Opportunities**: Discover ingredient combinations with high search demand but low video supply
 - **Ingredient Gap Finder**: "Others searched lamb + rice + sumac (47 searches, only 2 videos)" — that's your opportunity
+- **Google Trends Integration**: External validation of trending ingredients with breakout detection
 
 ### The Moat
 
@@ -94,6 +95,23 @@ npm run ingest:videos -- --query "miso pasta recipe" --max 50
 npm run ingest:videos -- --queries "miso pasta,gochujang chicken" --max 30
 ```
 
+### Run Scheduled Jobs
+
+Start the automated scheduler with PM2:
+```bash
+cd backend
+pm2 start ecosystem.config.cjs
+pm2 status
+```
+
+Or run individual jobs manually:
+```bash
+npm run trends:daily      # Fetch Google Trends data
+npm run batch:daily       # Ingest YouTube videos
+npm run aggregate:trends  # Aggregate trends into demand signals
+npm run scheduler         # Start scheduler daemon
+```
+
 See `SETUP.md` for more details.
 
 ## Tech Stack
@@ -109,7 +127,8 @@ See `SETUP.md` for more details.
 - **Ingredient-based Search**: Search by ingredients, see relevant recipe videos
 - **Tag Filtering**: Filter by cooking method (air fryer, oven, etc.), dietary (vegan, keto, etc.), and cuisine (korean, italian, etc.)
 - **Demand Intelligence**: View demand signals (HOT/GROWING/STABLE/NICHE) with scores
-- **Content Opportunities**: Discover gaps in the market (quality_gap, freshness_gap, underserved, trending)
+- **Content Opportunities**: Discover gaps in the market (quality_gap, freshness_gap, underserved, trending, google_breakout)
+- **Hot Ingredients**: Browse trending ingredients by time period (today/week/month) with growth indicators
 
 ### AI-Powered Extraction
 - **Ingredient Detection**: AI-powered extraction with synonym normalization (100+ canonical forms)
@@ -121,6 +140,14 @@ See `SETUP.md` for more details.
 - **Correction System**: Click ingredients to correct detection errors, improving AI accuracy for everyone
 - **Opportunity Tracking**: Track and manage content ideas through your pipeline
 - **Outcome Reporting**: Report video performance to calibrate prediction accuracy
+
+### Google Trends Integration
+
+- **External Validation**: Google Trends data validates internal demand signals
+- **Breakout Detection**: Identifies ingredients with >5000% growth (immediate opportunities)
+- **Rising Queries**: Discover related trending queries for content angle ideas
+- **Enhanced Confidence**: Demand scores boosted when internal + external signals align
+- **Automated Fetching**: Daily cron job fetches trends for top 50 ingredients
 
 ### ML Training & Analytics
 - **Analytics API**: Trending ingredients, seasonal patterns, content gaps, co-occurrence

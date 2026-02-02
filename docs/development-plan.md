@@ -97,8 +97,8 @@ These features must be built early to start the flywheel:
 | Service | Purpose |
 |---------|---------|
 | YouTube Data API v3 | Video metadata, search |
-| Anthropic Claude API | Ingredient extraction from video metadata |
-| Google Trends RSS Feed | Demand signals (official, ToS compliant) |
+| Anthropic Claude API / Groq | Ingredient extraction from video metadata |
+| Google Trends (HTTP API) | External demand validation, breakout detection |
 | Stripe API | Payments |
 | Google OAuth | Authentication |
 
@@ -423,6 +423,53 @@ These features must be built early to start the flywheel:
 #### Moat Contribution
 - **Outcome calibration loop begins** ✅
 - Accuracy scores calculated (when N>100)
+
+---
+
+### Week 7+: Google Trends Integration ✅ COMPLETE
+
+#### Objectives
+- Integrate Google Trends for external demand validation
+- Build automated scheduling system for data collection
+- Create Hot Ingredients UI for trending display
+
+#### Tasks
+
+**Google Trends Integration** ✅
+- [x] Create Google Trends HTTP client with rate limiting (5 req/min)
+- [x] Add `GoogleTrend` table for daily interest scores
+- [x] Add `GoogleTrendRelatedQuery` table for rising queries
+- [x] Add `GoogleTrendsCache` table for response caching
+- [x] Add `GoogleTrendsJobLog` table for job monitoring
+- [x] Implement breakout detection (>5000% growth)
+- [x] Integrate trends boost into demand calculator (20% weight)
+- [x] Add new opportunity types: `google_breakout`, `velocity_mismatch`
+
+**Automated Scheduler** ✅
+- [x] Build centralized scheduler using `node-cron`
+- [x] Schedule Google Trends fetch (1:00 AM daily)
+- [x] Schedule batch video ingestion (2:00 AM daily)
+- [x] Schedule trends aggregation (3:00 AM daily)
+- [x] Schedule data cleanup (4:00 AM Sunday)
+- [x] Create PM2 ecosystem config for process management
+- [x] Add NPM scripts: `trends:daily`, `aggregate:trends`, `scheduler`
+
+**Hot Ingredients UI** ✅
+- [x] Create `TrendingIngredients` component
+- [x] Add time period tabs (today/week/month)
+- [x] Display growth indicators and breakout badges
+- [x] Add `analytics.hotIngredients` endpoint
+
+#### Deliverables
+- [x] Google Trends data flowing into database
+- [x] Enhanced demand scores with external validation
+- [x] Automated daily data collection
+- [x] Hot Ingredients UI on home page
+
+#### Moat Contribution
+- External data validates internal signals
+- Breakout detection identifies immediate opportunities
+- Confidence scores improved with multi-source validation
 
 ---
 
@@ -2069,6 +2116,9 @@ Some shortcuts acceptable for V1:
 - ✅ Free/Pro tiers with enforcement
 - ✅ Auth (email + Google OAuth)
 - ✅ Stripe billing
+- ✅ Google Trends Integration (external demand validation)
+- ✅ Automated Cron Job Scheduler (node-cron + PM2)
+- ✅ Hot Ingredients UI (trending display)
 
 **Deferred to V1.1+:**
 - Channel Benchmarking (requires YouTube OAuth, deferred per PRD)

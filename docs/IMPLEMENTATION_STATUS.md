@@ -12,6 +12,8 @@
 | Week 6 | Demand Intelligence + Corrections | ✅ Complete |
 | Week 7 | Opportunities & Tracking | ✅ Complete |
 | Week 7+ | ML Training & Analytics | ✅ Complete |
+| Week 7++ | Google Trends Integration | ✅ Complete |
+| Week 7++ | Automated Cron Scheduling | ✅ Complete |
 | Week 8 | Auth + Payments | ⏳ Pending |
 | Week 9 | Trends + Polish + Launch | ⏳ Pending |
 
@@ -526,6 +528,154 @@ npx tsx src/scripts/calibrate-opportunities.ts
 # Backfill: Historical trend data
 npx tsx src/scripts/aggregate-trends.ts --backfill=30
 ```
+
+---
+
+## ✅ Completed: Google Trends Integration
+
+### Overview
+
+Incorporated daily Google Trends data into Kitvas to boost demand signal accuracy, validate trending topics with external data, and discover emerging ingredient trends.
+
+### Database Schema Additions ✅
+
+**New Tables:**
+- `GoogleTrend` - Stores Google Trends interest over time data (0-100 score)
+- `GoogleTrendRelatedQuery` - Stores rising/top related queries for trend discovery
+- `GoogleTrendsCache` - Multi-layer caching to minimize API requests
+- `GoogleTrendsJobLog` - Job execution logging for monitoring
+
+**Modified Tables:**
+- `DemandSignal` - Added `googleTrendsScore`, `googleTrendsGrowth`, `googleTrendsBreakout`, `googleTrendsFetchedAt`
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `backend/src/lib/google-trends/client.ts` | HTTP client for Google Trends |
+| `backend/src/lib/google-trends/fetcher.ts` | High-level fetcher with rate limiting |
+| `backend/src/lib/google-trends/rate-limiter.ts` | Token bucket (5 req/min) |
+| `backend/src/lib/google-trends/cache.ts` | Multi-layer caching |
+| `backend/src/scripts/fetch-google-trends.ts` | Daily batch script |
+
+### Demand Score Integration ✅
+
+**New Weight Distribution:**
+| Factor | Previous | New (with Trends) |
+|--------|----------|-------------------|
+| View Performance | 40% | 30% |
+| Content Gap | 35% | 30% |
+| Velocity | 15% | 10% |
+| Freshness | 10% | 10% |
+| **Google Trends** | 0% | **20%** |
+
+### New Opportunity Types ✅
+
+- `google_breakout` - Ingredient experiencing explosive growth (>5000%) on Google Trends
+- `velocity_mismatch` - Google searches growing faster than YouTube video supply
+
+### Hot Ingredients UI ✅
+
+**New Component:** `TrendingIngredients.tsx`
+- Displays trending ingredients on home page
+- Three time periods: Today, This Week, This Month
+- Shows interest score, growth percentage, and BREAKOUT badges
+- Click ingredient to search
+
+**New Endpoint:** `analytics.hotIngredients`
+- Returns top ingredients by Google Trends interest
+- Calculates growth vs previous period
+- Identifies breakout trends
+
+### Deep Insights Integration ✅
+
+1. **Gap Score Boosting** - Trending ingredients get multiplied gap scores
+   - Breakout: 2.0x multiplier
+   - Strong growth (>30%): 1.5x multiplier
+   - Moderate growth (>10%): 1.25x multiplier
+   - Declining (<-20%): 0.75x multiplier
+
+2. **Content Angle Suggestions** - New `analytics.relatedAngles` endpoint
+   - Surfaces rising Google Trends queries as content suggestions
+   - Shows growth percentage and content angle recommendations
+
+3. **Trends Insight Display** - IngredientGaps component shows:
+   - Trends growth percentage indicators
+   - BREAKOUT badges for explosive trends
+   - Visual highlighting for trending ingredients
+
+### Files Modified
+
+- `backend/src/lib/youtube-demand-calculator.ts` - Added TrendsBoost interface, new opportunity types
+- `backend/src/routers/analytics.ts` - Added hotIngredients, relatedAngles endpoints
+- `backend/src/routers/gaps.ts` - Added trends boost multiplier to gap scores
+- `frontend/src/components/SearchResults.tsx` - Integrated ContentAngles component
+- `frontend/src/components/IngredientGaps.tsx` - Added trends badges and insights
+- `frontend/src/lib/trpc.ts` - Updated OpportunityType
+
+---
+
+## ✅ Completed: Automated Cron Job Scheduling
+
+### Overview
+
+All batch jobs and maintenance scripts now run automatically via a centralized cron scheduler. No manual command execution needed.
+
+### Scheduler System ✅
+
+**Core Files:**
+- `backend/src/cron/config.ts` - Central job configuration with schedules and timeouts
+- `backend/src/cron/scheduler.ts` - Node.js daemon that runs jobs on schedule
+- `backend/ecosystem.config.cjs` - PM2 configuration for running scheduler locally
+
+### Scheduled Jobs
+
+| Job | Schedule (UTC) | Description |
+|-----|----------------|-------------|
+| `aggregate-trends` | Daily 12:10 AM | Aggregate search trends |
+| `trends-daily` | Daily 1:00 AM | Fetch Google Trends data |
+| `batch-daily` | Daily 2:00 AM | Video processing & demand calculation |
+| `refresh-views` | Sunday 3:00 AM | Refresh YouTube view counts |
+| `aggregate-corrections` | Monday 4:00 AM | Aggregate ML corrections |
+| `calibrate-opportunities` | Tuesday 5:00 AM | Calibrate opportunity scoring |
+
+### NPM Scripts Added
+
+```bash
+# Scheduler commands
+npm run scheduler        # Start the scheduler daemon
+npm run scheduler:list   # List all configured jobs
+npm run scheduler:once   # Run all jobs once (testing)
+npm run scheduler:run <job>  # Run a specific job
+
+# Individual job scripts
+npm run aggregate:trends
+npm run refresh:views
+npm run aggregate:corrections
+npm run calibrate:opportunities
+```
+
+### Local Deployment (PM2)
+
+```bash
+# Start both API and scheduler
+pm2 start ecosystem.config.cjs
+
+# View status
+pm2 status
+
+# View logs
+pm2 logs kitvas-scheduler
+```
+
+### Job Logging
+
+All job executions are logged to `GoogleTrendsJobLog` table:
+- Job name and type
+- Status (started/completed/failed)
+- Duration in seconds
+- Error messages (if any)
+- Timestamp
 
 ---
 

@@ -15,25 +15,28 @@ This approach ensures fast search responses and enables ingredient-level intelli
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Daily Batch Job                           │
-│  (Runs automatically every day)                              │
+│              Centralized Scheduler (node-cron)              │
+│  (Runs automatically via PM2 or npm run scheduler)          │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  1. Generate intelligent queries                             │
-│     ├─ Popular ingredient combinations                      │
-│     ├─ Search patterns from database                        │
-│     ├─ Ingredient co-occurrence                            │
-│     └─ YouTube autocomplete (demand signals)                 │
+│  1:00 AM - Google Trends Fetch                               │
+│     ├─ Fetch trends for top 50 ingredients                  │
+│     ├─ Discover related rising queries                      │
+│     └─ Store in GoogleTrend table                           │
 │                                                              │
-│  2. Fetch videos from YouTube API                           │
+│  2:00 AM - Daily Batch Job                                   │
+│     ├─ Generate intelligent queries                         │
+│     ├─ Fetch videos from YouTube API                        │
+│     ├─ Extract ingredients (title/description/transcript)   │
+│     └─ Store videos + ingredients in database               │
 │                                                              │
-│  3. Extract ingredients immediately                          │
-│     ├─ From title (high confidence)                          │
-│     └─ From description (medium confidence)                  │
+│  3:00 AM - Trends Aggregation                                │
+│     ├─ Combine Google Trends + YouTube metrics              │
+│     ├─ Calculate enhanced demand scores                     │
+│     └─ Update DemandSignal table                            │
 │                                                              │
-│  4. Store in database                                        │
-│     ├─ Video metadata                                        │
-│     └─ Extracted ingredients (linked)                        │
+│  4:00 AM Sunday - Data Cleanup                               │
+│     └─ Clean old cache and processed data                   │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
                           │
@@ -41,9 +44,11 @@ This approach ensures fast search responses and enables ingredient-level intelli
 ┌─────────────────────────────────────────────────────────────┐
 │                    Database                                  │
 │                                                              │
-│  Videos ──┐                                                  │
-│           ├──► VideoIngredients ──► Ingredients              │
-│  Searches ──┘                                                  │
+│  Videos ──────┬──► VideoIngredients ──► Ingredients         │
+│               │                                              │
+│  Searches ────┤                                              │
+│               │                                              │
+│  GoogleTrend ─┴──► DemandSignal (enhanced scores)           │
 │                                                              │
 │  All data pre-extracted and ready for fast queries          │
 └─────────────────────────────────────────────────────────────┘
@@ -55,8 +60,8 @@ This approach ensures fast search responses and enables ingredient-level intelli
 │  User searches: ["miso", "pasta"]                            │
 │                                                              │
 │  → Query pre-extracted VideoIngredients                      │
-│  → Return matching videos instantly                          │
-│  → No real-time API calls needed                             │
+│  → Combine YouTube metrics + Google Trends                   │
+│  → Return enhanced demand intelligence instantly             │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -75,75 +80,81 @@ npm run ingest:videos
 
 ### Automated Daily Execution
 
-#### Using Cron (Linux/Mac)
+Kitvas now includes a **centralized scheduler** that manages all cron jobs in one place using `node-cron`. This is the recommended approach for local development and deployment.
 
-Add to crontab:
+#### Using the Built-in Scheduler (Recommended)
+
+The scheduler runs all scheduled jobs automatically:
+
 ```bash
-# Run daily at 2 AM
-0 2 * * * cd /path/to/kitvas/backend && npm run batch:daily >> /var/log/kitvas-batch.log 2>&1
+# Start the scheduler (runs all jobs on schedule)
+npm run scheduler
+
+# Or run with PM2 for process management (recommended)
+pm2 start ecosystem.config.cjs
 ```
 
-#### Using systemd Timer (Linux)
+**Scheduled Jobs:**
 
-Create `/etc/systemd/system/kitvas-batch.service`:
-```ini
-[Unit]
-Description=Kitvas Daily Batch Job
-After=network.target
+| Job | Schedule | Description |
+|-----|----------|-------------|
+| Google Trends Fetch | 1:00 AM | Fetch trending data for top ingredients |
+| Daily Batch Job | 2:00 AM | Ingest new YouTube videos |
+| Trends Aggregation | 3:00 AM | Aggregate trends data into demand signals |
+| Data Cleanup | 4:00 AM (Sunday) | Clean old cache and processed data |
 
-[Service]
-Type=oneshot
-User=your-user
-WorkingDirectory=/path/to/kitvas/backend
-ExecStart=/usr/bin/npm run batch:daily
-```
+All jobs are defined in `backend/src/scheduler/index.ts`.
 
-Create `/etc/systemd/system/kitvas-batch.timer`:
-```ini
-[Unit]
-Description=Run Kitvas batch job daily at 2 AM
+#### Using PM2 (Local Development)
 
-[Timer]
-OnCalendar=daily
-OnCalendar=02:00
-Persistent=true
+PM2 provides process management with automatic restarts:
 
-[Install]
-WantedBy=timers.target
-```
-
-Enable:
 ```bash
-sudo systemctl enable kitvas-batch.timer
-sudo systemctl start kitvas-batch.timer
+cd backend
+
+# Start both API and scheduler
+pm2 start ecosystem.config.cjs
+
+# Check status
+pm2 status
+
+# View logs
+pm2 logs kitvas-scheduler
+
+# Stop all
+pm2 stop all
 ```
 
-#### Using GitHub Actions (CI/CD)
+The `ecosystem.config.cjs` configures:
+- **kitvas-api**: Main backend server on port 4001
+- **kitvas-scheduler**: Cron job scheduler
 
-Create `.github/workflows/daily-batch.yml`:
-```yaml
-name: Daily Batch Job
+#### Using System Cron (Alternative)
 
-on:
-  schedule:
-    - cron: '0 2 * * *'  # 2 AM UTC daily
-  workflow_dispatch:  # Allow manual trigger
+If you prefer system cron over the built-in scheduler:
 
-jobs:
-  batch:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-      - run: npm install
-        working-directory: backend
-      - run: npm run batch:daily
-        working-directory: backend
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+```bash
+# Add to crontab
+crontab -e
+
+# Google Trends - 1 AM daily
+0 1 * * * cd /path/to/kitvas/backend && npm run trends:daily >> logs/trends.log 2>&1
+
+# Batch job - 2 AM daily
+0 2 * * * cd /path/to/kitvas/backend && npm run batch:daily >> logs/batch.log 2>&1
+
+# Trends aggregation - 3 AM daily
+0 3 * * * cd /path/to/kitvas/backend && npm run aggregate:trends >> logs/aggregate.log 2>&1
+```
+
+#### NPM Scripts for Manual Execution
+
+```bash
+# Run individual jobs manually
+npm run trends:daily      # Fetch Google Trends
+npm run batch:daily       # Ingest YouTube videos
+npm run aggregate:trends  # Aggregate trend data
+npm run scheduler         # Start the scheduler daemon
 ```
 
 ## Components
@@ -275,14 +286,74 @@ if (transcript) {
 
 ---
 
+## Google Trends Integration ✅ (Implemented)
+
+The batch system now includes Google Trends data for enhanced demand intelligence:
+
+### Data Flow
+
+1. **Daily Trends Fetch** (`backend/src/scripts/fetch-google-trends.ts`)
+   - Runs at 1:00 AM before the main batch job
+   - Fetches interest data for top 50 ingredients
+   - Discovers related rising queries (emerging trends)
+   - Stores in `GoogleTrend` and `GoogleTrendRelatedQuery` tables
+
+2. **Trends Aggregation** (`backend/src/scripts/aggregate-trends.ts`)
+   - Runs at 3:00 AM after batch job completes
+   - Combines Google Trends + YouTube metrics
+   - Updates `DemandSignal` table with enhanced scores
+   - Identifies breakout ingredients (>5000% growth)
+
+3. **Enhanced Demand Score**
+   - YouTube metrics: 70% weight (views, engagement, freshness)
+   - Google Trends: 20% weight (external validation)
+   - Internal search: 10% weight (user behavior)
+
+### Database Tables
+
+- `GoogleTrend` - Daily interest scores (0-100) per ingredient
+- `GoogleTrendRelatedQuery` - Rising/top related queries
+- `GoogleTrendsCache` - Response caching to minimize API requests
+- `GoogleTrendsJobLog` - Job execution history and monitoring
+
+### Rate Limiting
+
+- 5 requests per minute to Google Trends
+- Random 1-3 second delays between requests
+- Exponential backoff on 429 errors
+- 24-hour cache TTL for daily data
+
+---
+
+## Job Monitoring
+
+All scheduled jobs log their execution status to the `GoogleTrendsJobLog` table:
+
+```typescript
+// Check job status
+const recentJobs = await prisma.googleTrendsJobLog.findMany({
+  where: { createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+  orderBy: { createdAt: 'desc' },
+});
+```
+
+Job statuses:
+- `started` - Job began execution
+- `completed` - Job finished successfully
+- `failed` - Job encountered an error (check `errorMessage`)
+
+---
+
 ## Future Enhancements
 
 1. **ML-Based Extraction**: Replace keyword matching with ML model
 2. ~~**Transcript Analysis**: Extract from video transcripts (higher accuracy)~~ ✅ Implemented
-3. **Image Analysis**: Extract from video thumbnails/frames
-4. **Incremental Updates**: Only fetch new videos since last run
-5. **Priority Queue**: Prioritize high-demand ingredient combinations
-6. **Error Recovery**: Retry failed extractions automatically
+3. ~~**Google Trends Integration**: External demand validation~~ ✅ Implemented
+4. **Image Analysis**: Extract from video thumbnails/frames
+5. **Incremental Updates**: Only fetch new videos since last run
+6. **Priority Queue**: Prioritize high-demand ingredient combinations
+7. **Error Recovery**: Retry failed extractions automatically
+8. **Seasonal Pattern Detection**: Mine historical trends for seasonality
 
 ## Troubleshooting
 

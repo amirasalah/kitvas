@@ -83,7 +83,7 @@ kitvas/
 
 ## Current Status
 
-✅ **Weeks 1-7 Completed:**
+✅ **Weeks 1-7+ Completed:**
 - Project structure set up (monorepo with frontend, backend, shared)
 - Next.js 14 frontend with App Router
 - Hono backend with tRPC
@@ -102,6 +102,9 @@ kitvas/
 - Outcome reporting (report video performance - moat feature)
 - Admin labeling tool for training data collection (`/admin/label`)
 - Dataset export (JSON/CSV) with train/validation/test splits (`/admin/label/export`)
+- **Google Trends integration** (external demand validation)
+- **Automated cron job scheduler** (node-cron + PM2)
+- **Hot Ingredients UI** (trending ingredients display)
 
 🚧 **In Progress:**
 - Week 8: Authentication + Payments
@@ -139,6 +142,67 @@ The script will:
 - Skip videos that already exist
 
 **Note:** The script includes rate limiting to avoid hitting YouTube API quotas.
+
+## 6. Run Scheduled Jobs
+
+Kitvas includes a centralized scheduler for automated data collection:
+
+### Using PM2 (Recommended for Local Development)
+
+```bash
+cd backend
+
+# Start both API and scheduler
+pm2 start ecosystem.config.cjs
+
+# Check status
+pm2 status
+
+# View scheduler logs
+pm2 logs kitvas-scheduler
+
+# Stop all processes
+pm2 stop all
+```
+
+### Scheduled Jobs
+
+| Job | Schedule | Description |
+|-----|----------|-------------|
+| Google Trends Fetch | 1:00 AM | Fetch trending data for top ingredients |
+| Daily Batch Job | 2:00 AM | Ingest new YouTube videos |
+| Trends Aggregation | 3:00 AM | Aggregate trends into demand signals |
+| Data Cleanup | 4:00 AM Sunday | Clean old cache data |
+
+### Manual Execution
+
+Run individual jobs manually:
+
+```bash
+cd backend
+
+# Fetch Google Trends data
+npm run trends:daily
+
+# Run batch video ingestion
+npm run batch:daily
+
+# Aggregate trends data
+npm run aggregate:trends
+
+# Start scheduler daemon (runs jobs on schedule)
+npm run scheduler
+```
+
+### Monitoring Jobs
+
+Check job execution status in the database:
+
+```bash
+# Open Prisma Studio
+npm run db:studio
+# Navigate to GoogleTrendsJobLog table
+```
 
 ## Testing the Search Feature
 
