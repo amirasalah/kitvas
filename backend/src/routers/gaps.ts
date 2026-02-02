@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { initTRPC } from '@trpc/server';
 import type { Context } from '../context.js';
+import { getTrendsBoost } from '../lib/google-trends/fetcher.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -14,6 +15,9 @@ export interface IngredientGap {
   videoCount: number;
   gapScore: number;
   demandBand: string | null;
+  trendsInsight: string | null;
+  trendsGrowth: number | null;
+  isBreakout: boolean;
 }
 
 /**
@@ -74,7 +78,40 @@ export const gapsRouter = t.router({
           select: { demandBand: true },
         });
 
-        const gapScore = searchCount / Math.max(1, videoCount);
+        // Calculate base gap score
+        let gapScore = searchCount / Math.max(1, videoCount);
+
+        // Apply Google Trends boost multiplier
+        const trendsBoost = await getTrendsBoost(ctx.prisma, [ingredient]);
+        let trendsInsight: string | null = null;
+        let trendsGrowth: number | null = null;
+        let isBreakout = false;
+
+        if (trendsBoost) {
+          trendsGrowth = trendsBoost.weekOverWeekGrowth;
+          isBreakout = trendsBoost.isBreakout;
+
+          // Breakout = double opportunity
+          if (trendsBoost.isBreakout) {
+            gapScore *= 2.0;
+            trendsInsight = '🚀 BREAKOUT - Immediate opportunity window';
+          }
+          // Strong growth = 50% boost
+          else if (trendsBoost.weekOverWeekGrowth > 30) {
+            gapScore *= 1.5;
+            trendsInsight = `📈 Trending up ${Math.round(trendsBoost.weekOverWeekGrowth)}% this week`;
+          }
+          // Moderate growth = 25% boost
+          else if (trendsBoost.weekOverWeekGrowth > 10) {
+            gapScore *= 1.25;
+            trendsInsight = `↗️ Growing interest (+${Math.round(trendsBoost.weekOverWeekGrowth)}%)`;
+          }
+          // Declining = reduce priority
+          else if (trendsBoost.weekOverWeekGrowth < -20) {
+            gapScore *= 0.75;
+            trendsInsight = `↘️ Declining interest (${Math.round(trendsBoost.weekOverWeekGrowth)}%)`;
+          }
+        }
 
         gaps.push({
           ingredient,
@@ -82,6 +119,9 @@ export const gapsRouter = t.router({
           videoCount,
           gapScore,
           demandBand: demandSignal?.demandBand || null,
+          trendsInsight,
+          trendsGrowth,
+          isBreakout,
         });
       }
 
@@ -171,7 +211,32 @@ async function findGapsFromVideoData(
 
     // Gap score: high avg views + low overall video count = opportunity
     // Normalize: avgViews/100000 gives rough scale, divided by video count
-    const gapScore = (avgViews / 100000) / Math.max(1, totalVideoCount / 10);
+    let gapScore = (avgViews / 100000) / Math.max(1, totalVideoCount / 10);
+
+    // Apply Google Trends boost multiplier
+    const trendsBoost = await getTrendsBoost(ctx.prisma, [ingredient]);
+    let trendsInsight: string | null = null;
+    let trendsGrowth: number | null = null;
+    let isBreakout = false;
+
+    if (trendsBoost) {
+      trendsGrowth = trendsBoost.weekOverWeekGrowth;
+      isBreakout = trendsBoost.isBreakout;
+
+      if (trendsBoost.isBreakout) {
+        gapScore *= 2.0;
+        trendsInsight = '🚀 BREAKOUT - Immediate opportunity window';
+      } else if (trendsBoost.weekOverWeekGrowth > 30) {
+        gapScore *= 1.5;
+        trendsInsight = `📈 Trending up ${Math.round(trendsBoost.weekOverWeekGrowth)}% this week`;
+      } else if (trendsBoost.weekOverWeekGrowth > 10) {
+        gapScore *= 1.25;
+        trendsInsight = `↗️ Growing interest (+${Math.round(trendsBoost.weekOverWeekGrowth)}%)`;
+      } else if (trendsBoost.weekOverWeekGrowth < -20) {
+        gapScore *= 0.75;
+        trendsInsight = `↘️ Declining interest (${Math.round(trendsBoost.weekOverWeekGrowth)}%)`;
+      }
+    }
 
     gaps.push({
       ingredient,
@@ -179,6 +244,9 @@ async function findGapsFromVideoData(
       videoCount: totalVideoCount,
       gapScore,
       demandBand: null,
+      trendsInsight,
+      trendsGrowth,
+      isBreakout,
     });
   }
 

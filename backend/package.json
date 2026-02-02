@@ -14,7 +14,8 @@
     "db:studio": "prisma studio",
     "ingest:videos": "tsx src/scripts/ingest-videos.ts",
     "batch:daily": "tsx src/scripts/daily-batch-job.ts",
-    "accuracy": "tsx src/scripts/measure-accuracy.ts"
+    "accuracy": "tsx src/scripts/measure-accuracy.ts",
+    "trends:daily": "tsx src/scripts/fetch-google-trends.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -24,6 +25,7 @@
     "@prisma/client": "^5.7.1",
     "@trpc/server": "^11.8.1",
     "dotenv": "^17.2.3",
+    "google-trends-api": "^4.9.2",
     "groq-sdk": "^0.37.0",
     "hono": "^4.3.0",
     "youtube-transcript": "^1.2.1",

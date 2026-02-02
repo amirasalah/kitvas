@@ -217,9 +217,16 @@ model DemandSignal {
   sampleSize      Int
   calculatedAt    DateTime @default(now())
 
+  // Google Trends integration
+  googleTrendsScore     Int?      // 0-100 from Google Trends
+  googleTrendsGrowth    Float?    // Week-over-week growth %
+  googleTrendsBreakout  Boolean   @default(false)
+  googleTrendsFetchedAt DateTime?
+
   @@index([ingredientKey])
   @@index([demandBand])
   @@index([calculatedAt])
+  @@index([googleTrendsBreakout])
 }
 
 // ============================================================================
@@ -284,4 +291,68 @@ model AccuracySnapshot {
   measuredAt DateTime @default(now())
 
   @@index([measuredAt])
+}
+
+// ============================================================================
+// Google Trends Integration Models
+// ============================================================================
+
+// Stores Google Trends interest over time data
+model GoogleTrend {
+  id            String   @id @default(cuid())
+  keyword       String   // ingredient or combination (lowercase)
+  interestValue Int      // 0-100 Google Trends score
+  isBreakout    Boolean  @default(false) // >5000% growth indicator
+  date          DateTime // The date this data point represents
+  region        String   @default("US") // Geographic region
+  fetchedAt     DateTime @default(now())
+
+  @@unique([keyword, date, region])
+  @@index([keyword])
+  @@index([date])
+  @@index([isBreakout])
+  @@index([interestValue])
+}
+
+// Stores related/rising queries discovered from Google Trends
+model GoogleTrendRelatedQuery {
+  id            String   @id @default(cuid())
+  parentKeyword String   // The keyword we queried for
+  relatedQuery  String   // The suggested related query
+  queryType     String   // 'rising' | 'top'
+  value         Int?     // For top: 0-100, for rising: growth percentage
+  isBreakout    Boolean  @default(false) // >5000% growth
+  fetchedAt     DateTime @default(now())
+
+  @@unique([parentKeyword, relatedQuery, fetchedAt])
+  @@index([parentKeyword])
+  @@index([queryType])
+  @@index([isBreakout])
+}
+
+// Caches Google Trends API responses to minimize requests
+model GoogleTrendsCache {
+  id           String   @id @default(cuid())
+  cacheKey     String   @unique // Hash of query parameters
+  responseData String   @db.Text // JSON stringified response
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([cacheKey])
+  @@index([expiresAt])
+}
+
+// Tracks Google Trends job execution for monitoring
+model GoogleTrendsJobLog {
+  id           String   @id @default(cuid())
+  jobType      String   // 'daily_fetch' | 'discovery' | 'backfill'
+  status       String   // 'started' | 'completed' | 'failed'
+  keywordCount Int?     // Number of keywords processed
+  errorMessage String?  @db.Text
+  duration     Int?     // Duration in seconds
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([jobType])
 }

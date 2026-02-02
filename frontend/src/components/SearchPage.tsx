@@ -5,6 +5,7 @@ import { trpc } from '@/app/providers'
 import { SearchInput } from './SearchInput'
 import { SearchResults } from './SearchResults'
 import { HeroFoodDecorations } from './FoodIllustrations'
+import { TrendingIngredients } from './TrendingIngredients'
 
 export function SearchPage() {
   const [ingredients, setIngredients] = useState<string[]>([])
@@ -67,6 +68,15 @@ export function SearchPage() {
               <FeaturePill icon="🎯" text="Content Gaps" />
               <FeaturePill icon="✨" text="AI Detection" />
               <FeaturePill icon="📈" text="Trend Analysis" />
+            </div>
+          )}
+
+          {/* Trending Ingredients - only show when no search */}
+          {!hasSearched && (
+            <div className="max-w-3xl mx-auto">
+              <TrendingIngredients
+                onIngredientClick={(ingredient) => setIngredients([ingredient])}
+              />
             </div>
           )}
         </div>

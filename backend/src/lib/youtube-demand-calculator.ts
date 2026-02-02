@@ -7,7 +7,7 @@ import type { YouTubeVideo } from './youtube.js';
 
 export type DemandBand = 'hot' | 'growing' | 'stable' | 'niche' | 'unknown';
 export type ContentGapType = 'underserved' | 'saturated' | 'balanced' | 'emerging';
-export type OpportunityType = 'quality_gap' | 'freshness_gap' | 'underserved' | 'trending';
+export type OpportunityType = 'quality_gap' | 'freshness_gap' | 'underserved' | 'trending' | 'google_breakout' | 'velocity_mismatch';
 export type OpportunityPriority = 'high' | 'medium' | 'low';
 
 export interface MarketMetrics {
@@ -44,6 +44,12 @@ export interface FreshnessAnalysis {
   isEmergingTopic: boolean;
 }
 
+export interface TrendsBoost {
+  interestScore: number; // 0-100 from Google Trends
+  weekOverWeekGrowth: number; // percentage
+  isBreakout: boolean;
+}
+
 export interface YouTubeDemandSignal {
   demandScore: number;
   demandBand: DemandBand;
@@ -52,6 +58,7 @@ export interface YouTubeDemandSignal {
   opportunities: ContentOpportunity[];
   confidence: number;
   sampleSize: number;
+  trendsBoost?: TrendsBoost;
 }
 
 function formatViews(views: number): string {
@@ -266,19 +273,26 @@ function calculateContentGap(
 function calculateDemandScore(
   metrics: MarketMetrics,
   gap: ContentGap,
-  freshness: FreshnessAnalysis
+  freshness: FreshnessAnalysis,
+  trendsBoost?: TrendsBoost
 ): { score: number; band: DemandBand } {
   let score = 0;
 
-  // Base demand from views (40% weight) - logarithmic scale
-  const viewScore = Math.min(40, Math.log10(Math.max(1, metrics.avgViews)) * 8);
+  // Weight distribution (with Google Trends: 30/30/10/10/20, without: 40/35/15/10)
+  const hasTrends = trendsBoost && trendsBoost.interestScore > 0;
+  const viewWeight = hasTrends ? 6 : 8;      // Max 30 (with) or 40 (without)
+  const gapWeight = hasTrends ? 0.30 : 0.35; // 30% or 35%
+  const velocityWeight = hasTrends ? 3.33 : 5; // Max 10 or 15
+
+  // Base demand from views - logarithmic scale
+  const viewScore = Math.min(hasTrends ? 30 : 40, Math.log10(Math.max(1, metrics.avgViews)) * viewWeight);
   score += viewScore;
 
-  // Content gap opportunity (35% weight)
-  score += gap.score * 0.35;
+  // Content gap opportunity
+  score += gap.score * gapWeight;
 
-  // Velocity bonus (15% weight)
-  const velocityScore = Math.min(15, Math.log10(Math.max(1, metrics.avgViewsPerDay)) * 5);
+  // Velocity bonus
+  const velocityScore = Math.min(hasTrends ? 10 : 15, Math.log10(Math.max(1, metrics.avgViewsPerDay)) * velocityWeight);
   score += velocityScore;
 
   // Freshness/trending bonus (10% weight)
@@ -286,6 +300,26 @@ function calculateDemandScore(
     score += 10;
   } else if (freshness.recentVideoAvgViews > metrics.avgViews) {
     score += 5;
+  }
+
+  // Google Trends boost (20% weight when available)
+  if (trendsBoost) {
+    // Interest level: 0-10 points based on Google Trends score (0-100)
+    score += Math.min(10, trendsBoost.interestScore / 10);
+
+    // Growth bonus: 0-5 points based on week-over-week growth
+    if (trendsBoost.weekOverWeekGrowth > 50) {
+      score += 5;
+    } else if (trendsBoost.weekOverWeekGrowth > 20) {
+      score += 3;
+    } else if (trendsBoost.weekOverWeekGrowth > 0) {
+      score += 1;
+    }
+
+    // Breakout bonus: 5 points for >5000% growth signals
+    if (trendsBoost.isBreakout) {
+      score += 5;
+    }
   }
 
   score = Math.round(Math.max(0, Math.min(100, score)));
@@ -310,7 +344,8 @@ function generateOpportunities(
   metrics: MarketMetrics,
   quality: QualityDistribution,
   freshness: FreshnessAnalysis,
-  gap: ContentGap
+  gap: ContentGap,
+  trendsBoost?: TrendsBoost
 ): ContentOpportunity[] {
   const opportunities: ContentOpportunity[] = [];
 
@@ -354,6 +389,26 @@ function generateOpportunities(
     });
   }
 
+  // Google Trends breakout opportunity
+  if (trendsBoost?.isBreakout) {
+    opportunities.push({
+      type: 'google_breakout',
+      title: 'Google Trends Breakout',
+      description: `This ingredient is experiencing explosive growth on Google (${trendsBoost.weekOverWeekGrowth > 100 ? '>100%' : `+${Math.round(trendsBoost.weekOverWeekGrowth)}%`} week-over-week). First-mover advantage available.`,
+      priority: 'high',
+    });
+  }
+
+  // Velocity mismatch: Google trending faster than YouTube supply
+  if (trendsBoost && trendsBoost.weekOverWeekGrowth > 30 && freshness.recentVideoCount < 5 && !trendsBoost.isBreakout) {
+    opportunities.push({
+      type: 'velocity_mismatch',
+      title: 'Search Demand Outpacing Content',
+      description: `Google searches growing +${Math.round(trendsBoost.weekOverWeekGrowth)}% but only ${freshness.recentVideoCount} new videos in 90 days. Supply gap widening.`,
+      priority: 'high',
+    });
+  }
+
   return opportunities;
 }
 
@@ -383,10 +438,12 @@ function createUnknownSignal(): YouTubeDemandSignal {
  * Calculate YouTube-based demand signal from video data
  * Uses only the data already fetched - zero additional API calls
  * Filters videos by relevance to searched ingredients
+ * Optionally incorporates Google Trends data for enhanced accuracy
  */
 export function calculateYouTubeDemandSignal(
   videos: YouTubeVideo[],
-  ingredients: string[]
+  ingredients: string[],
+  trendsBoost?: TrendsBoost
 ): YouTubeDemandSignal {
   if (videos.length === 0) {
     return createUnknownSignal();
@@ -433,11 +490,32 @@ export function calculateYouTubeDemandSignal(
   const qualityDistribution = calculateQualityDistribution(relevantVideos);
   const freshnessAnalysis = calculateFreshnessAnalysis(relevantVideos);
   const contentGap = calculateContentGap(marketMetrics, qualityDistribution, freshnessAnalysis);
-  const { score, band } = calculateDemandScore(marketMetrics, contentGap, freshnessAnalysis);
-  const opportunities = generateOpportunities(marketMetrics, qualityDistribution, freshnessAnalysis, contentGap);
+  const { score, band } = calculateDemandScore(marketMetrics, contentGap, freshnessAnalysis, trendsBoost);
+  const opportunities = generateOpportunities(marketMetrics, qualityDistribution, freshnessAnalysis, contentGap, trendsBoost);
 
-  // Confidence based on relevant sample size (full at 15+ videos)
-  const confidence = Math.min(1, relevantVideos.length / 15);
+  // Confidence calculation:
+  // - Base confidence from sample size (up to 0.6)
+  // - Video metrics add up to 0.2
+  // - Google Trends validation adds up to 0.2
+  let confidence = Math.min(0.6, relevantVideos.length / 25);
+
+  // Boost confidence if we have good video metrics
+  if (marketMetrics.avgViews > 10000) {
+    confidence += 0.1;
+  }
+  if (marketMetrics.videoCount >= 10) {
+    confidence += 0.1;
+  }
+
+  // Boost confidence with Google Trends validation
+  if (trendsBoost && trendsBoost.interestScore > 0) {
+    confidence += 0.1;
+    if (trendsBoost.interestScore > 50) {
+      confidence += 0.1;
+    }
+  }
+
+  confidence = Math.min(1, confidence);
 
   return {
     demandScore: score,
@@ -447,5 +525,6 @@ export function calculateYouTubeDemandSignal(
     opportunities,
     confidence,
     sampleSize: relevantVideos.length,
+    trendsBoost,
   };
 }

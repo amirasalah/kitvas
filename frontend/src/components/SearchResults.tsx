@@ -12,6 +12,7 @@ import type {
   ContentOpportunity,
 } from '@/lib/trpc'
 import { IngredientGaps } from './IngredientGaps'
+import { ContentAngles } from './ContentAngles'
 
 interface SearchResultsProps {
   analyzedVideos: VideoResult[]
@@ -199,6 +200,11 @@ export function SearchResults({
           {/* Ingredient Gap Opportunities */}
           {ingredients.length >= 1 && (
             <IngredientGaps ingredients={ingredients} onAddIngredient={onAddIngredient} showContent />
+          )}
+
+          {/* Content Angles from Google Trends */}
+          {ingredients.length >= 1 && (
+            <ContentAngles ingredients={ingredients} />
           )}
 
           {/* Opportunities Section */}

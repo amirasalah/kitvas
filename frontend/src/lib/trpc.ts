@@ -44,7 +44,7 @@ export type YouTubeVideoResult = {
 // YouTube market-based demand signal types
 export type DemandBand = 'hot' | 'growing' | 'stable' | 'niche' | 'unknown'
 export type ContentGapType = 'underserved' | 'saturated' | 'balanced' | 'emerging'
-export type OpportunityType = 'quality_gap' | 'freshness_gap' | 'underserved' | 'trending'
+export type OpportunityType = 'quality_gap' | 'freshness_gap' | 'underserved' | 'trending' | 'google_breakout' | 'velocity_mismatch'
 export type OpportunityPriority = 'high' | 'medium' | 'low'
 
 export type ContentGap = {

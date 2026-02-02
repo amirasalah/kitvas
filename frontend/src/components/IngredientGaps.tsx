@@ -59,17 +59,40 @@ export function IngredientGaps({ ingredients, onAddIngredient, showContent = fal
           <button
             key={gap.ingredient}
             onClick={() => onAddIngredient?.(gap.ingredient)}
-            className="group px-4 py-2.5 bg-white rounded-xl border border-purple-200 shadow-sm hover:shadow-md hover:border-purple-400 transition-all cursor-pointer text-left"
+            className={`group px-4 py-2.5 bg-white rounded-xl border shadow-sm hover:shadow-md transition-all cursor-pointer text-left ${
+              gap.isBreakout
+                ? 'border-red-300 ring-2 ring-red-100 hover:border-red-400'
+                : 'border-purple-200 hover:border-purple-400'
+            }`}
             title={`Add "${gap.ingredient}" to search`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-purple-900 group-hover:text-purple-700">+{gap.ingredient}</span>
-              {gap.gapScore > 5 && (
+              {/* Breakout badge - highest priority */}
+              {gap.isBreakout && (
+                <span className="text-xs px-2 py-0.5 bg-red-500 text-white rounded-full font-bold animate-pulse flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
+                  BREAKOUT
+                </span>
+              )}
+              {/* Trends growth indicator */}
+              {!gap.isBreakout && gap.trendsGrowth !== null && gap.trendsGrowth > 10 && (
+                <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium">
+                  +{Math.round(gap.trendsGrowth)}%
+                </span>
+              )}
+              {!gap.isBreakout && gap.trendsGrowth !== null && gap.trendsGrowth < -10 && (
+                <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full font-medium">
+                  {Math.round(gap.trendsGrowth)}%
+                </span>
+              )}
+              {/* Gap score badges */}
+              {gap.gapScore > 5 && !gap.isBreakout && (
                 <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
                   High
                 </span>
               )}
-              {gap.gapScore > 2 && gap.gapScore <= 5 && (
+              {gap.gapScore > 2 && gap.gapScore <= 5 && !gap.isBreakout && (
                 <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">
                   Good
                 </span>
@@ -84,6 +107,12 @@ export function IngredientGaps({ ingredients, onAddIngredient, showContent = fal
                 </span>
               )}
             </div>
+            {/* Trends insight text */}
+            {gap.trendsInsight && (
+              <div className="text-xs text-purple-600 mt-1 font-medium">
+                {gap.trendsInsight}
+              </div>
+            )}
             <div className="text-xs text-gray-500 mt-1">
               {gap.searchCount} {data.source === 'search_patterns' ? 'searches' : 'videos'} &middot; {gap.videoCount} total
             </div>

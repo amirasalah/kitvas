@@ -9,6 +9,7 @@ import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/i
 import { extractTagsFromVideo, storeExtractedTags } from '../lib/tag-extractor.js';
 import { processBackgroundVideos } from '../lib/background-processor.js';
 import { fetchTranscript } from '../lib/transcript-fetcher.js';
+import { getTrendsBoost } from '../lib/google-trends/fetcher.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -326,9 +327,12 @@ export const searchRouter = t.router({
           );
         }
 
+        // Fetch Google Trends boost for enhanced demand scoring
+        const trendsBoost = await getTrendsBoost(ctx.prisma, normalizedIngredients);
+
         // Calculate demand signals from YouTube data (zero extra API calls)
-        // Pass ingredients to filter videos by relevance
-        const demandSignal = calculateYouTubeDemandSignal(youtubeVideos || [], normalizedIngredients);
+        // Pass ingredients to filter videos by relevance, with optional Google Trends boost
+        const demandSignal = calculateYouTubeDemandSignal(youtubeVideos || [], normalizedIngredients, trendsBoost || undefined);
         const hadYouTubeHit = youtubeVideos !== null && youtubeVideos.length > 0;
 
         // Persist demand signal to database for caching and historical tracking
@@ -349,6 +353,11 @@ export const searchRouter = t.router({
                 confidence: demandSignal.confidence,
                 sampleSize: demandSignal.sampleSize,
                 calculatedAt: new Date(),
+                // Google Trends data
+                googleTrendsScore: demandSignal.trendsBoost?.interestScore ?? null,
+                googleTrendsGrowth: demandSignal.trendsBoost?.weekOverWeekGrowth ?? null,
+                googleTrendsBreakout: demandSignal.trendsBoost?.isBreakout ?? false,
+                googleTrendsFetchedAt: demandSignal.trendsBoost ? new Date() : null,
               },
               create: {
                 ingredientKey,
@@ -363,6 +372,11 @@ export const searchRouter = t.router({
                 contentGapType: demandSignal.contentGap.type,
                 confidence: demandSignal.confidence,
                 sampleSize: demandSignal.sampleSize,
+                // Google Trends data
+                googleTrendsScore: demandSignal.trendsBoost?.interestScore ?? null,
+                googleTrendsGrowth: demandSignal.trendsBoost?.weekOverWeekGrowth ?? null,
+                googleTrendsBreakout: demandSignal.trendsBoost?.isBreakout ?? false,
+                googleTrendsFetchedAt: demandSignal.trendsBoost ? new Date() : null,
               },
             });
           } catch (error) {

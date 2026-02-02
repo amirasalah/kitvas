@@ -2,6 +2,7 @@
  * Analytics Router
  *
  * Provides insights and ML training data endpoints:
+ * - Hot ingredients from Google Trends (today/week/month)
  * - Trending ingredients (7d/30d/90d)
  * - Seasonal patterns
  * - Content gaps (underserved ingredient combinations)
@@ -18,6 +19,155 @@ import type { Context } from '../context.js';
 const t = initTRPC.context<Context>().create();
 
 export const analyticsRouter = t.router({
+  /**
+   * Get hot ingredients from Google Trends
+   * Returns top trending ingredients for today, this week, or this month
+   */
+  hotIngredients: t.procedure
+    .input(
+      z.object({
+        period: z.enum(['today', 'week', 'month']).default('week'),
+        limit: z.number().min(1).max(20).default(10),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const { period, limit } = input;
+
+      // Calculate date range based on period
+      const dateRange = {
+        today: 1,
+        week: 7,
+        month: 30,
+      }[period];
+
+      const since = new Date(Date.now() - dateRange * 24 * 60 * 60 * 1000);
+      const previousPeriodStart = new Date(Date.now() - dateRange * 2 * 24 * 60 * 60 * 1000);
+
+      // Get current period data from Google Trends
+      const currentTrends = await ctx.prisma.googleTrend.groupBy({
+        by: ['keyword'],
+        where: { date: { gte: since } },
+        _avg: { interestValue: true },
+        orderBy: { _avg: { interestValue: 'desc' } },
+        take: limit * 2, // Get extra to filter out low interest
+      });
+
+      if (currentTrends.length === 0) {
+        // Fallback to internal search data if no Google Trends data
+        return {
+          period,
+          source: 'internal' as const,
+          ingredients: [],
+          hasGoogleTrends: false,
+        };
+      }
+
+      // Get breakout status for each keyword (can't aggregate boolean in PostgreSQL)
+      const breakoutKeywords = await ctx.prisma.googleTrend.findMany({
+        where: {
+          keyword: { in: currentTrends.map((t) => t.keyword) },
+          date: { gte: since },
+          isBreakout: true,
+        },
+        select: { keyword: true },
+        distinct: ['keyword'],
+      });
+      const breakoutSet = new Set(breakoutKeywords.map((b) => b.keyword));
+
+      // Get previous period data for growth calculation
+      const previousTrends = await ctx.prisma.googleTrend.groupBy({
+        by: ['keyword'],
+        where: {
+          date: { gte: previousPeriodStart, lt: since },
+          keyword: { in: currentTrends.map((t) => t.keyword) },
+        },
+        _avg: { interestValue: true },
+      });
+
+      const previousMap = new Map(previousTrends.map((t) => [t.keyword, t._avg.interestValue || 0]));
+
+      // Build results with growth calculation
+      const results = [];
+
+      for (const trend of currentTrends) {
+        if (results.length >= limit) break;
+
+        const currentAvg = trend._avg.interestValue || 0;
+        if (currentAvg < 10) continue; // Filter out very low interest
+
+        const previousAvg = previousMap.get(trend.keyword) || currentAvg;
+        let growth = 0;
+
+        if (previousAvg > 0) {
+          growth = ((currentAvg - previousAvg) / previousAvg) * 100;
+        }
+
+        results.push({
+          name: trend.keyword,
+          interest: Math.round(currentAvg),
+          growth: Math.round(growth),
+          isBreakout: breakoutSet.has(trend.keyword),
+          rank: results.length + 1,
+        });
+      }
+
+      return {
+        period,
+        source: 'google_trends' as const,
+        ingredients: results,
+        hasGoogleTrends: true,
+      };
+    }),
+
+  /**
+   * Get related content angles from Google Trends rising queries
+   * Surfaces rising searches as content topic suggestions
+   */
+  relatedAngles: t.procedure
+    .input(
+      z.object({
+        ingredient: z.string().min(1),
+        limit: z.number().min(1).max(10).default(5),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const { ingredient, limit } = input;
+      const normalizedIngredient = ingredient.toLowerCase().trim();
+
+      // Get rising queries related to ingredient
+      const risingQueries = await ctx.prisma.googleTrendRelatedQuery.findMany({
+        where: {
+          parentKeyword: normalizedIngredient,
+          queryType: 'rising',
+          value: { gt: 50 }, // Only significant growth
+        },
+        orderBy: { value: 'desc' },
+        take: limit,
+      });
+
+      // Format suggestions with actionable insights
+      const formatAngleSuggestion = (query: string, baseIngredient: string): string => {
+        const cleanQuery = query.replace(baseIngredient, '').trim();
+        if (query.includes('recipe')) return 'Recipe-focused content opportunity';
+        if (query.includes('easy') || query.includes('simple')) return 'Beginner-friendly content angle';
+        if (query.includes('healthy') || query.includes('keto') || query.includes('vegan')) return 'Health-conscious audience';
+        if (query.includes('air fryer') || query.includes('instant pot')) return 'Appliance-specific content';
+        if (cleanQuery.length > 0) return `Consider "${cleanQuery}" variations`;
+        return 'Trending search variation';
+      };
+
+      return {
+        ingredient: normalizedIngredient,
+        contentAngles: risingQueries.map((q) => ({
+          query: q.relatedQuery,
+          growth: q.value,
+          isBreakout: q.isBreakout,
+          suggestion: formatAngleSuggestion(q.relatedQuery, normalizedIngredient),
+        })),
+        hasData: risingQueries.length > 0,
+      };
+    }),
+
   /**
    * Get trending ingredients by search volume
    * Returns top ingredients with growth compared to previous period
