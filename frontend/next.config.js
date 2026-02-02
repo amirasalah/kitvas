@@ -2,8 +2,18 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@kitvas/shared'],
-  // Next.js 16 uses Turbopack by default for faster builds
-  // Turbopack provides 2-5x faster production builds and up to 10x faster Fast Refresh
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.googleusercontent.com',
+      },
+    ],
+  },
 }
 
 module.exports = nextConfig
