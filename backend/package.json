@@ -15,7 +15,15 @@
     "ingest:videos": "tsx src/scripts/ingest-videos.ts",
     "batch:daily": "tsx src/scripts/daily-batch-job.ts",
     "accuracy": "tsx src/scripts/measure-accuracy.ts",
-    "trends:daily": "tsx src/scripts/fetch-google-trends.ts"
+    "trends:daily": "tsx src/scripts/fetch-google-trends.ts",
+    "aggregate:trends": "tsx src/scripts/aggregate-trends.ts",
+    "refresh:views": "tsx src/scripts/refresh-views.ts",
+    "aggregate:corrections": "tsx src/scripts/aggregate-corrections.ts",
+    "calibrate:opportunities": "tsx src/scripts/calibrate-opportunities.ts",
+    "scheduler": "tsx src/cron/scheduler.ts start",
+    "scheduler:once": "tsx src/cron/scheduler.ts once",
+    "scheduler:list": "tsx src/cron/scheduler.ts list",
+    "scheduler:run": "tsx src/cron/scheduler.ts run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -28,11 +36,13 @@
     "google-trends-api": "^4.9.2",
     "groq-sdk": "^0.37.0",
     "hono": "^4.3.0",
+    "node-cron": "^4.2.1",
     "youtube-transcript": "^1.2.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^20.10.6",
+    "@types/node-cron": "^3.0.11",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "eslint": "^8.56.0",

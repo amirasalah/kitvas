@@ -22,6 +22,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Logs
+logs/
+*.log
+
 # Local env files
 .env
 .env*.local
@@ -46,3 +50,15 @@ prisma/migrations/
 *.swp
 *.swo
 *~
+
+# Claude Code
+.claude/
+
+# Cache
+.eslintcache
+.turbo/
+*.cache
+
+# PM2
+*.pid
+.pm2/
