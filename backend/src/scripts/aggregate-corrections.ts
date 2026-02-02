@@ -212,6 +212,24 @@ async function aggregateRenames(minOccurrences: number): Promise<number> {
   return created;
 }
 
+/**
+ * Mark feedback patterns as incorporated once they have sufficient occurrences
+ * These will be picked up by the extractor's refreshExtractionFeedback()
+ */
+async function markFeedbackAsIncorporated(minOccurrences: number): Promise<number> {
+  const result = await prisma.extractionFeedback.updateMany({
+    where: {
+      incorporated: false,
+      occurrences: { gte: minOccurrences },
+    },
+    data: {
+      incorporated: true,
+    },
+  });
+
+  return result.count;
+}
+
 async function generatePromptSuggestions(): Promise<void> {
   console.log('\n--- Prompt Improvement Suggestions ---');
 
@@ -297,7 +315,14 @@ async function main(): Promise<void> {
     console.log(`  False negatives identified: ${fnCount}`);
     console.log(`  Renames identified: ${renameCount}`);
 
-    // Print suggestions
+    // Mark all feedback with sufficient occurrences as incorporated
+    // (the extractor will pick them up on next refresh)
+    const incorporatedCount = await markFeedbackAsIncorporated(minOccurrences);
+    if (incorporatedCount > 0) {
+      console.log(`\n  Marked ${incorporatedCount} feedback patterns as incorporated`);
+    }
+
+    // Print suggestions for patterns not yet incorporated
     await generatePromptSuggestions();
 
     // Print current stats

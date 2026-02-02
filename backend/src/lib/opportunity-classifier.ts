@@ -54,9 +54,12 @@ interface CalibratedWeights {
 }
 
 // Cache for calibration data
-let calibrationCache: Map<string, { successRate: number; totalOutcomes: number }> | null = null;
+let calibrationCache: Map<string, { successRate: number; totalOutcomes: number; avgViews7day: number }> | null = null;
 let calibrationCacheTime: Date | null = null;
 const CALIBRATION_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+// Derived calibration multipliers based on historical performance
+let demandBandMultipliers: Map<string, number> | null = null;
 
 /**
  * Load calibration data from database
@@ -74,19 +77,48 @@ async function loadCalibrationData(prisma: PrismaClient): Promise<void> {
     });
 
     calibrationCache = new Map();
+    demandBandMultipliers = new Map();
+
+    // Track success rates by demand band to compute multipliers
+    const bandStats = new Map<string, { totalSuccess: number; totalOutcomes: number }>();
+
     for (const cal of calibrations) {
       const key = `${cal.demandBand}:${cal.opportunityScore}`;
       calibrationCache.set(key, {
         successRate: cal.successRate,
         totalOutcomes: cal.totalOutcomes,
+        avgViews7day: cal.avgViews7day,
       });
+
+      // Accumulate band-level stats
+      const bandKey = cal.demandBand;
+      const existing = bandStats.get(bandKey) || { totalSuccess: 0, totalOutcomes: 0 };
+      existing.totalSuccess += cal.successRate * cal.totalOutcomes;
+      existing.totalOutcomes += cal.totalOutcomes;
+      bandStats.set(bandKey, existing);
+    }
+
+    // Compute demand band multipliers based on actual success rates
+    // If a band has higher-than-expected success, boost scores in that band
+    const overallSuccessRate = Array.from(bandStats.values())
+      .reduce((sum, s) => sum + s.totalSuccess, 0) /
+      Math.max(1, Array.from(bandStats.values()).reduce((sum, s) => sum + s.totalOutcomes, 0));
+
+    for (const [band, stats] of bandStats) {
+      if (stats.totalOutcomes >= 5) {
+        const bandSuccessRate = stats.totalSuccess / stats.totalOutcomes;
+        // Multiplier: if band performs 50% better than average, multiply by 1.25
+        const multiplier = Math.max(0.5, Math.min(1.5, bandSuccessRate / Math.max(0.1, overallSuccessRate)));
+        demandBandMultipliers.set(band, multiplier);
+      }
     }
 
     calibrationCacheTime = new Date();
-    console.log(`[Classifier] Loaded ${calibrations.length} calibration entries`);
+    console.log(`[Classifier] Loaded ${calibrations.length} calibration entries, ${demandBandMultipliers.size} band multipliers`);
   } catch (error) {
     console.warn('[Classifier] Failed to load calibration:', error);
     calibrationCache = new Map();
+    demandBandMultipliers = new Map();
   }
 }
 
@@ -103,7 +135,17 @@ function getCalibratedSuccessRate(demandBand: string, score: string): number | n
 }
 
 /**
+ * Get calibration multiplier for a demand band
+ * Returns 1.0 if no calibration data available
+ */
+function getDemandBandMultiplier(demandBand: string): number {
+  if (!demandBandMultipliers) return 1.0;
+  return demandBandMultipliers.get(demandBand) ?? 1.0;
+}
+
+/**
  * Calculate a composite opportunity score from features
+ * Applies calibration-based multipliers when available
  */
 function calculateCompositeScore(features: OpportunityFeatures): number {
   const {
@@ -111,6 +153,7 @@ function calculateCompositeScore(features: OpportunityFeatures): number {
     contentGapScore,
     avgViews,
     recentVideoRatio,
+    demandBand,
   } = features;
 
   // Normalize views to 0-100 scale (log scale, caps at 1M)
@@ -120,12 +163,21 @@ function calculateCompositeScore(features: OpportunityFeatures): number {
   const freshnessBonus = recentVideoRatio > 0.3 ? 10 : 0;
 
   // Weighted composite score
-  const composite = (
+  let composite = (
     demandScore * 0.35 +           // Demand is most important
     contentGapScore * 0.30 +       // Content gap is second
     normalizedViews * 0.20 +       // Views validate demand
     freshnessBonus * 0.15          // Freshness indicates trends
   );
+
+  // Apply calibration-based multiplier for the demand band
+  // If outcomes show this demand band performs better/worse than expected, adjust
+  const multiplier = getDemandBandMultiplier(demandBand);
+  if (multiplier !== 1.0) {
+    composite *= multiplier;
+    // Clamp to 0-100 range
+    composite = Math.max(0, Math.min(100, composite));
+  }
 
   return Math.round(composite);
 }

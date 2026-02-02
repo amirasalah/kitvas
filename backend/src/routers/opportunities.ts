@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import { TRPCError, initTRPC } from '@trpc/server';
 import type { Context } from '../context.js';
+import { getStableAnonymousId } from '../lib/anonymous-user.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -36,7 +37,7 @@ export const opportunitiesRouter = t.router({
       const { ingredients, opportunityScore, opportunityType, title } = input;
 
       // For now, generate a temporary user ID if not authenticated
-      const tempUserId = ctx.userId || 'anonymous-' + Date.now();
+      const tempUserId = getStableAnonymousId(ctx);
 
       try {
         // Ensure user exists
@@ -123,7 +124,7 @@ export const opportunitiesRouter = t.router({
     .input(UpdateStatusSchema)
     .mutation(async ({ input, ctx }) => {
       const { opportunityId, status } = input;
-      const tempUserId = ctx.userId || 'anonymous-' + Date.now();
+      const tempUserId = getStableAnonymousId(ctx);
 
       try {
         // Verify opportunity exists and belongs to user
@@ -170,7 +171,7 @@ export const opportunitiesRouter = t.router({
    * List user's tracked opportunities
    */
   list: t.procedure.query(async ({ ctx }) => {
-    const tempUserId = ctx.userId || 'anonymous-' + Date.now();
+    const tempUserId = getStableAnonymousId(ctx);
 
     try {
       // Get user's tracked opportunities
@@ -227,7 +228,7 @@ export const opportunitiesRouter = t.router({
     .input(z.object({ opportunityId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const { opportunityId } = input;
-      const tempUserId = ctx.userId || 'anonymous-' + Date.now();
+      const tempUserId = getStableAnonymousId(ctx);
 
       try {
         // Verify opportunity exists and belongs to user
@@ -268,7 +269,7 @@ export const opportunitiesRouter = t.router({
    * Get opportunities that need outcome reporting (published 30+ days ago)
    */
   getPendingOutcomes: t.procedure.query(async ({ ctx }) => {
-    const tempUserId = ctx.userId || 'anonymous-' + Date.now();
+    const tempUserId = getStableAnonymousId(ctx);
 
     try {
       const thirtyDaysAgo = new Date();

@@ -444,6 +444,21 @@ async function extractFromTranscript(
   return [];
 }
 
+// Prisma client for feedback refresh - set via initExtractor()
+let prismaClient: PrismaClient | null = null;
+
+/**
+ * Initialize the extractor with a Prisma client for feedback refresh
+ * Call this once at startup to enable dynamic feedback
+ */
+export function initExtractor(prisma: PrismaClient): void {
+  prismaClient = prisma;
+  // Immediately load feedback on init
+  refreshExtractionFeedback(prisma).catch(err =>
+    console.warn('[Extraction] Failed to load initial feedback:', err)
+  );
+}
+
 /**
  * Extract ingredients from video metadata (and optionally transcript)
  * Uses Groq LLM for intelligent extraction, falls back to keyword matching
@@ -457,6 +472,11 @@ export async function extractIngredientsFromVideo(
   description: string | null,
   transcript?: string | null
 ): Promise<ExtractedIngredient[]> {
+  // Refresh feedback lists if needed (has 1-hour cache)
+  if (prismaClient) {
+    await refreshExtractionFeedback(prismaClient);
+  }
+
   // Collect all ingredients in a map (keyed by name for deduplication)
   const ingredients = new Map<string, ExtractedIngredient>();
 

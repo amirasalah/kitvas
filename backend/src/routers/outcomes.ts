@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import { TRPCError, initTRPC } from '@trpc/server';
 import type { Context } from '../context.js';
+import { getStableAnonymousId } from '../lib/anonymous-user.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -28,7 +29,7 @@ export const outcomesRouter = t.router({
     .input(SubmitOutcomeSchema)
     .mutation(async ({ input, ctx }) => {
       const { trackedOpportunityId, videoUrl, views7day, rating, didNotPublish } = input;
-      const tempUserId = ctx.userId || 'anonymous-' + Date.now();
+      const tempUserId = getStableAnonymousId(ctx);
 
       try {
         // Verify opportunity exists and belongs to user
@@ -119,7 +120,7 @@ export const outcomesRouter = t.router({
    * Get user's outcome stats
    */
   getStats: t.procedure.query(async ({ ctx }) => {
-    const tempUserId = ctx.userId || 'anonymous-' + Date.now();
+    const tempUserId = getStableAnonymousId(ctx);
 
     try {
       // Get all user outcomes with opportunity data

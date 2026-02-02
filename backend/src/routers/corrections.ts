@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import { TRPCError, initTRPC } from '@trpc/server';
 import type { Context } from '../context.js';
+import { getStableAnonymousId } from '../lib/anonymous-user.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -33,9 +34,8 @@ export const correctionsRouter = t.router({
     .mutation(async ({ input, ctx }) => {
       const { videoId, ingredientId, action, suggestedName } = input;
 
-      // For now, generate a temporary user ID if not authenticated
-      // This will be replaced with real auth in Week 8
-      const tempUserId = ctx.userId || 'anonymous-' + Date.now();
+      // Get stable anonymous ID or real user ID
+      const tempUserId = getStableAnonymousId(ctx);
 
       try {
         // Verify video exists
@@ -60,6 +60,40 @@ export const correctionsRouter = t.router({
             code: 'NOT_FOUND',
             message: 'Ingredient not found',
           });
+        }
+
+        // Validate rename corrections
+        if (action === 'rename') {
+          const trimmedName = suggestedName?.trim().toLowerCase();
+
+          if (!trimmedName || trimmedName.length === 0) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Rename corrections require a suggested name',
+            });
+          }
+
+          if (trimmedName.length < 2 || trimmedName.length > 50) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Suggested name must be 2-50 characters',
+            });
+          }
+
+          if (trimmedName === ingredient.name.toLowerCase()) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Suggested name is the same as the original',
+            });
+          }
+
+          // Check for invalid characters (only allow letters, spaces, hyphens)
+          if (!/^[a-z\s\-]+$/.test(trimmedName)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Suggested name can only contain letters, spaces, and hyphens',
+            });
+          }
         }
 
         // Ensure user exists (create temporary user if needed)
@@ -161,8 +195,8 @@ export const correctionsRouter = t.router({
       const { videoId, ingredientName } = input;
       const normalizedName = ingredientName.toLowerCase().trim();
 
-      // For now, generate a temporary user ID
-      const tempUserId = ctx.userId || 'anonymous-' + Date.now();
+      // Get stable anonymous ID or real user ID
+      const tempUserId = getStableAnonymousId(ctx);
 
       try {
         // Verify video exists
