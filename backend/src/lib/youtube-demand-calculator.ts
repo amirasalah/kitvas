@@ -68,11 +68,162 @@ function formatViews(views: number): string {
 }
 
 /**
+ * Common spelling variations for ingredients
+ * Maps alternative spellings to canonical forms
+ */
+const INGREDIENT_ALIASES: Record<string, string[]> = {
+  // Middle Eastern / Turkish
+  'kofta': ['kofte', 'köfte', 'kufte', 'kufta', 'kefte', 'kifta'],
+  'kofte': ['kofta', 'köfte', 'kufte', 'kufta', 'kefte', 'kifta'],
+  'tahini': ['tehina', 'tahina', 'techina'],
+  'falafel': ['felafel', 'falafil'],
+  'shawarma': ['shawerma', 'shwarma', 'shoarma'],
+  'hummus': ['humus', 'houmous', 'hommus'],
+  'baba ganoush': ['baba ghanoush', 'baba ghanouj', 'baba ganouj'],
+  'labneh': ['labne', 'labaneh', 'labni'],
+  'za\'atar': ['zaatar', 'zatar', 'zahtar'],
+  'sumac': ['sumak', 'sumaq'],
+  'halloumi': ['haloumi', 'hallumi'],
+  'kibbeh': ['kibbe', 'kubbeh', 'kubbe'],
+  'fattoush': ['fattush', 'fatoush'],
+
+  // Asian
+  'gochujang': ['gochujung', 'kochujang'],
+  'gochugaru': ['gochukaru', 'kochugaru'],
+  'doenjang': ['doenjung', 'dwenjang'],
+  'kimchi': ['kimchee', 'gimchi'],
+  'bulgogi': ['bulkogi', 'bulgoki'],
+  'bibimbap': ['bibimbop', 'bi bim bap'],
+  'sriracha': ['siracha', 'sirarcha'],
+  'teriyaki': ['teryaki', 'teriyaky'],
+  'edamame': ['edamami'],
+  'tofu': ['toufu', 'tofoo'],
+  'miso': ['misso'],
+  'soy sauce': ['soysauce', 'soya sauce'],
+  'hoisin': ['hoysin', 'hoisen'],
+  'char siu': ['charsiu', 'char siew', 'cha siu'],
+
+  // Indian
+  'paneer': ['panir', 'paner'],
+  'biryani': ['biriyani', 'briyani', 'byriani'],
+  'tikka': ['tikha', 'teeka'],
+  'masala': ['marsala', 'massala'],
+  'korma': ['kurma', 'qorma'],
+  'vindaloo': ['vindalu', 'vindalho'],
+  'samosa': ['samusa', 'samoosa'],
+  'naan': ['nan', 'nann'],
+  'ghee': ['gee', 'ghi'],
+  'turmeric': ['tumeric', 'termeric'],
+  'cardamom': ['cardamon', 'cardomom'],
+  'coriander': ['corriander', 'cilantro'],
+  'cilantro': ['coriander', 'cilatro'],
+  'cumin': ['cummin', 'jeera'],
+  'garam masala': ['garam marsala', 'garum masala'],
+
+  // Latin American
+  'quesadilla': ['quesadila', 'quesidilla'],
+  'guacamole': ['guacamoli', 'guacamle'],
+  'jalapeno': ['jalapeño', 'halapeno', 'jalepeno'],
+  'chipotle': ['chipotl', 'chiptole'],
+  'queso': ['keso'],
+  'tortilla': ['tortila', 'tortiya'],
+  'burrito': ['burito', 'buritto'],
+  'enchilada': ['enchilata', 'enchildada'],
+  'mole': ['molé', 'molay'],
+
+  // General
+  'yogurt': ['yoghurt', 'yogourt'],
+  'barbecue': ['barbeque', 'bbq', 'bar-b-q'],
+  'parmesan': ['parmasan', 'parmigiano', 'parm'],
+  'mozzarella': ['mozarella', 'mozerella', 'mozzerella'],
+  'ricotta': ['ricota', 'rikotta'],
+  'prosciutto': ['proscuito', 'prosciuto'],
+  'bruschetta': ['bruchetta', 'brushetta'],
+  'focaccia': ['focacia', 'foccacia'],
+  'gnocchi': ['gnochi', 'nochi'],
+  'tzatziki': ['tsatsiki', 'tzaziki', 'zaziki'],
+  'gyro': ['gyros', 'yiro', 'yiros'],
+  'feta': ['fetta'],
+  'pita': ['pitta'],
+  'couscous': ['cous cous', 'couscus', 'kuskus'],
+  'quinoa': ['kinwa', 'keenwa'],
+  'acai': ['açaí', 'acaí', 'assai'],
+};
+
+/**
+ * Calculate Levenshtein distance between two strings
+ * Returns the minimum number of single-character edits needed
+ */
+function levenshteinDistance(str1: string, str2: string): number {
+  const m = str1.length;
+  const n = str2.length;
+
+  // Create a matrix
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+  // Initialize first column and row
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  // Fill the matrix
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (str1[i - 1] === str2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(
+          dp[i - 1][j],     // deletion
+          dp[i][j - 1],     // insertion
+          dp[i - 1][j - 1]  // substitution
+        );
+      }
+    }
+  }
+
+  return dp[m][n];
+}
+
+/**
+ * Get all known variations of an ingredient
+ */
+function getIngredientVariations(ingredient: string): string[] {
+  const lower = ingredient.toLowerCase();
+  const variations = new Set<string>([lower]);
+
+  // Check if this ingredient has aliases
+  if (INGREDIENT_ALIASES[lower]) {
+    INGREDIENT_ALIASES[lower].forEach(alias => variations.add(alias));
+  }
+
+  // Check if this ingredient IS an alias of something
+  for (const [canonical, aliases] of Object.entries(INGREDIENT_ALIASES)) {
+    if (aliases.includes(lower)) {
+      variations.add(canonical);
+      aliases.forEach(alias => variations.add(alias));
+    }
+  }
+
+  return Array.from(variations);
+}
+
+/**
+ * Check if a word in text fuzzy-matches the ingredient
+ * Uses Levenshtein distance with threshold based on word length
+ */
+function fuzzyMatchWord(ingredient: string, word: string): boolean {
+  // For short words (<=4 chars), require exact match or 1 edit
+  // For longer words, allow up to 2 edits
+  const maxDistance = ingredient.length <= 4 ? 1 : 2;
+  const distance = levenshteinDistance(ingredient, word);
+  return distance <= maxDistance;
+}
+
+/**
  * Check if an ingredient appears in text with flexible matching
- * Handles compound words like "soy sauce" / "soysauce"
+ * Handles: compound words, spelling variations, aliases, and fuzzy matching
  */
 function checkIngredientInText(ingredient: string, text: string): boolean {
-  const lowerIng = ingredient.toLowerCase();
+  const lowerIng = ingredient.toLowerCase().trim();
   const lowerText = text.toLowerCase();
 
   // 1. Direct match
@@ -86,6 +237,28 @@ function checkIngredientInText(ingredient: string, text: string): boolean {
   const parts = lowerIng.split(/\s+/);
   if (parts.length === 2 && parts.every(part => part.length >= 3 && lowerText.includes(part))) {
     return true;
+  }
+
+  // 4. Check known aliases/variations
+  const variations = getIngredientVariations(lowerIng);
+  for (const variation of variations) {
+    if (lowerText.includes(variation)) return true;
+    // Also check without spaces for variations
+    const varNoSpaces = variation.replace(/\s+/g, '');
+    if (varNoSpaces !== variation && lowerText.includes(varNoSpaces)) return true;
+  }
+
+  // 5. Fuzzy matching - extract words from text and check each
+  // Only do this for single-word ingredients to avoid false positives
+  if (!lowerIng.includes(' ') && lowerIng.length >= 4) {
+    const words = lowerText.match(/\b[a-z]{4,}\b/g) || [];
+    for (const word of words) {
+      if (fuzzyMatchWord(lowerIng, word)) return true;
+      // Also check variations with fuzzy matching
+      for (const variation of variations) {
+        if (!variation.includes(' ') && fuzzyMatchWord(variation, word)) return true;
+      }
+    }
   }
 
   return false;
@@ -648,15 +821,34 @@ export function calculateYouTubeDemandSignal(
 
   // Filter to videos matching a sufficient proportion of searched ingredients.
   // Single ingredient: require exact match (100%)
-  // 2-3 ingredients: require 67% (allows 2/3 match since YouTube titles often omit some ingredients)
-  // 4+ ingredients: require 50%
-  const relevanceThreshold = ingredients.length <= 3
-    ? (ingredients.length === 1 ? 1.0 : 0.67)
-    : 0.5;
-  const relevantVideos = videos.filter(video => {
+  // 2 ingredients: require 100% (both must match for meaningful results)
+  // 3 ingredients: require 67% (2/3 must match)
+  // 4+ ingredients: require 75% (3/4 or 4/5 must match to avoid pollution from common ingredients)
+  let relevanceThreshold: number;
+  if (ingredients.length === 1) {
+    relevanceThreshold = 1.0;
+  } else if (ingredients.length === 2) {
+    relevanceThreshold = 1.0; // Both must match for 2-ingredient search
+  } else if (ingredients.length === 3) {
+    relevanceThreshold = 0.67; // 2 of 3
+  } else {
+    relevanceThreshold = 0.75; // 3 of 4, 4 of 5, etc.
+  }
+
+  // Track relevance scores for matched videos
+  const videoRelevances: { video: YouTubeVideo; relevance: number }[] = [];
+  for (const video of videos) {
     const relevance = calculateVideoRelevance(video, ingredients);
-    return relevance >= relevanceThreshold;
-  });
+    if (relevance >= relevanceThreshold) {
+      videoRelevances.push({ video, relevance });
+    }
+  }
+  const relevantVideos = videoRelevances.map(vr => vr.video);
+
+  // Calculate average relevance of matched videos
+  const avgRelevance = videoRelevances.length > 0
+    ? videoRelevances.reduce((sum, vr) => sum + vr.relevance, 0) / videoRelevances.length
+    : 0;
 
   // If fewer than 3 relevant videos, return niche/unknown
   if (relevantVideos.length < 3) {
@@ -685,6 +877,41 @@ export function calculateYouTubeDemandSignal(
   const marketMetrics = calculateMarketMetrics(relevantVideos);
   const qualityDistribution = calculateQualityDistribution(relevantVideos);
   const freshnessAnalysis = calculateFreshnessAnalysis(relevantVideos);
+
+  // UNPROVEN COMBINATION DETECTION:
+  // For multi-ingredient searches (3+), if sample size is small and average relevance is not perfect,
+  // it means no one has really made content for this specific combination - it's UNPROVEN.
+  // High avgViews in this case come from partially-matching videos about common ingredients,
+  // NOT from videos actually targeting this combination.
+  const isUnprovenCombination =
+    ingredients.length >= 3 &&
+    relevantVideos.length < 15 &&
+    avgRelevance < 1.0; // Not all ingredients match in most videos
+
+  // If it's an unproven combination, return early with appropriate classification
+  if (isUnprovenCombination) {
+    const baseSignal = createUnknownSignal();
+    return {
+      ...baseSignal,
+      demandBand: 'niche',
+      demandScore: 25, // Low but not zero - there's some partial content
+      marketMetrics,
+      contentGap: {
+        score: 70,
+        type: 'underserved',
+        reasoning: `Unproven combination - only ${relevantVideos.length} videos partially match (avg ${Math.round(avgRelevance * 100)}% ingredient match). No established content for this specific combination.`,
+      },
+      opportunities: [{
+        type: 'underserved' as OpportunityType,
+        title: 'Unproven Combination',
+        description: `This specific ingredient combination has no dedicated content. Could be a unique niche or simply unusual pairing.`,
+        priority: 'medium' as OpportunityPriority,
+      }],
+      sampleSize: relevantVideos.length,
+      confidence: 0.3, // Low confidence due to unproven nature
+    };
+  }
+
   // Pass ingredient count for niche advantage calculation in opportunity score
   const contentGap = calculateContentGap(marketMetrics, qualityDistribution, freshnessAnalysis, ingredients.length, trendsBoost);
   const { score, band } = calculateDemandScore(marketMetrics, contentGap, freshnessAnalysis, trendsBoost);

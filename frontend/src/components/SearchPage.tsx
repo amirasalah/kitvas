@@ -10,18 +10,28 @@ import { TrendingIngredients } from './TrendingIngredients'
 export function SearchPage() {
   const [ingredients, setIngredients] = useState<string[]>([])
   const [tags, setTags] = useState<string[]>([])
+  // Separate state for committed search - only updates when user explicitly triggers search
+  const [searchIngredients, setSearchIngredients] = useState<string[]>([])
+  const [searchTags, setSearchTags] = useState<string[]>([])
 
   const searchQuery = trpc.search.search.useQuery(
     {
-      ingredients,
-      tags: tags.length > 0 ? tags : undefined,
+      ingredients: searchIngredients,
+      tags: searchTags.length > 0 ? searchTags : undefined,
     },
     {
-      enabled: ingredients.length > 0,
+      enabled: searchIngredients.length > 0,
     }
   )
 
-  const hasSearched = ingredients.length > 0
+  const handleSearch = () => {
+    if (ingredients.length > 0) {
+      setSearchIngredients([...ingredients])
+      setSearchTags([...tags])
+    }
+  }
+
+  const hasSearched = searchIngredients.length > 0
 
   return (
     <div className="min-h-screen">
@@ -58,6 +68,7 @@ export function SearchPage() {
               onIngredientsChange={setIngredients}
               tags={tags}
               onTagsChange={setTags}
+              onSearch={handleSearch}
             />
           </div>
 
@@ -75,7 +86,11 @@ export function SearchPage() {
           {!hasSearched && (
             <div className="max-w-3xl mx-auto">
               <TrendingIngredients
-                onIngredientClick={(ingredient) => setIngredients([ingredient])}
+                onIngredientClick={(ingredient) => {
+                  setIngredients([ingredient])
+                  setSearchIngredients([ingredient])
+                  setSearchTags([])
+                }}
               />
             </div>
           )}
@@ -118,7 +133,11 @@ export function SearchPage() {
             opportunities={searchQuery.data.opportunities}
             ingredients={ingredients}
             lowRelevanceFallback={searchQuery.data.lowRelevanceFallback}
-            onAddIngredient={(ing) => setIngredients([...ingredients, ing])}
+            onAddIngredient={(ing) => {
+                const newIngredients = [...ingredients, ing]
+                setIngredients(newIngredients)
+                setSearchIngredients(newIngredients)
+              }}
           />
         )}
       </section>

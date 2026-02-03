@@ -10,7 +10,7 @@ import { extractTagsFromVideo, storeExtractedTags } from '../lib/tag-extractor.j
 import { processBackgroundVideos } from '../lib/background-processor.js';
 import { fetchTranscript } from '../lib/transcript-fetcher.js';
 import { getTrendsBoost } from '../lib/google-trends/fetcher.js';
-import { normalizeIngredient } from '../lib/ingredient-synonyms.js';
+import { normalizeIngredient, getSynonymMatches } from '../lib/ingredient-synonyms.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -56,6 +56,58 @@ async function searchYouTubeLive(
 }
 
 export const searchRouter = t.router({
+  // Autocomplete endpoint for ingredient suggestions
+  autocomplete: t.procedure
+    .input(z.object({ query: z.string().min(1).max(50) }))
+    .query(async ({ input, ctx }) => {
+      const { query } = input;
+      const normalizedQuery = query.toLowerCase().trim();
+
+      // Search database for matching ingredients
+      const dbIngredients = await ctx.prisma.ingredient.findMany({
+        where: {
+          name: {
+            contains: normalizedQuery,
+          },
+        },
+        take: 15,
+        orderBy: {
+          name: 'asc',
+        },
+        select: {
+          name: true,
+        },
+      });
+
+      // Also search the synonym map for aliases
+      const synonymMatches = getSynonymMatches(normalizedQuery, 15);
+
+      // Combine and dedupe results, prioritizing prefix matches
+      const allMatches = new Set<string>();
+
+      // First add prefix matches (from both sources)
+      for (const ing of dbIngredients) {
+        if (ing.name.startsWith(normalizedQuery)) {
+          allMatches.add(ing.name);
+        }
+      }
+      for (const name of synonymMatches) {
+        if (name.startsWith(normalizedQuery)) {
+          allMatches.add(name);
+        }
+      }
+
+      // Then add contains matches
+      for (const ing of dbIngredients) {
+        allMatches.add(ing.name);
+      }
+      for (const name of synonymMatches) {
+        allMatches.add(name);
+      }
+
+      return Array.from(allMatches).slice(0, 10);
+    }),
+
   search: t.procedure
     .input(SearchInputSchema)
     .query(async ({ input, ctx }) => {

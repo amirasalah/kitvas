@@ -336,3 +336,45 @@ export function getSynonyms(canonicalName: string): string[] {
 export function getAllCanonicalNames(): string[] {
   return Object.keys(SYNONYM_MAP);
 }
+
+/**
+ * Search for ingredients matching a partial query
+ * Returns canonical names that match the query (either directly or via synonyms)
+ */
+export function getSynonymMatches(query: string, limit = 10): string[] {
+  const matches: string[] = [];
+  const lowerQuery = query.toLowerCase().trim();
+
+  if (!lowerQuery) return matches;
+
+  // First pass: exact prefix matches on canonical names (higher priority)
+  for (const canonical of Object.keys(SYNONYM_MAP)) {
+    if (canonical.startsWith(lowerQuery)) {
+      matches.push(canonical);
+    }
+    if (matches.length >= limit) return matches;
+  }
+
+  // Second pass: contains matches on canonical names
+  for (const canonical of Object.keys(SYNONYM_MAP)) {
+    if (!matches.includes(canonical) && canonical.includes(lowerQuery)) {
+      matches.push(canonical);
+    }
+    if (matches.length >= limit) return matches;
+  }
+
+  // Third pass: check synonyms
+  for (const [canonical, synonyms] of Object.entries(SYNONYM_MAP)) {
+    if (matches.includes(canonical)) continue;
+
+    for (const synonym of synonyms) {
+      if (synonym.toLowerCase().includes(lowerQuery)) {
+        matches.push(canonical);
+        break;
+      }
+    }
+    if (matches.length >= limit) return matches;
+  }
+
+  return matches;
+}
