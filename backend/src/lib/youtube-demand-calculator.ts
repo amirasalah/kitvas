@@ -532,6 +532,8 @@ function classifyMarket(
   barrier: number,
   opportunity: number,
   freshness: FreshnessAnalysis,
+  sampleSize: number,
+  ingredientCount: number,
   trendsBoost?: TrendsBoost
 ): { type: ContentGapType; reasoning: string } {
   // Calculate timing bonus for emerging detection
@@ -539,6 +541,16 @@ function classifyMarket(
   if (trendsBoost?.isBreakout) timingBonus += 15;
   else if (trendsBoost && trendsBoost.weekOverWeekGrowth > 30) timingBonus += 10;
   if (freshness.recentVideoAvgViews > 0 && freshness.isEmergingTopic) timingBonus += 10;
+
+  // SMALL SAMPLE OVERRIDE: For multi-ingredient searches with very few matching videos,
+  // never classify as "saturated" - the high avgViews come from popular single-ingredient
+  // content, not competition for this specific combination
+  if (ingredientCount >= 3 && sampleSize < 10) {
+    return {
+      type: 'underserved',
+      reasoning: `Limited data (${sampleSize} videos) for this ${ingredientCount}-ingredient combination. Potential niche opportunity.`
+    };
+  }
 
   // SATURATED: High barrier (>60) regardless of opportunity
   if (barrier > 60) {
@@ -595,6 +607,7 @@ function calculateContentGap(
   quality: QualityDistribution,
   freshness: FreshnessAnalysis,
   ingredientCount: number = 1,
+  sampleSize: number = 50,
   trendsBoost?: TrendsBoost
 ): ContentGap {
   // Calculate the two key scores
@@ -602,7 +615,7 @@ function calculateContentGap(
   const opportunity = calculateOpportunityScore(metrics, freshness, barrier, ingredientCount, trendsBoost);
 
   // Classify the market
-  const { type, reasoning } = classifyMarket(barrier, opportunity, freshness, trendsBoost);
+  const { type, reasoning } = classifyMarket(barrier, opportunity, freshness, sampleSize, ingredientCount, trendsBoost);
 
   // Score is now opportunity-based (higher = better)
   // But we'll also factor in quality gap for the score
@@ -912,8 +925,8 @@ export function calculateYouTubeDemandSignal(
     };
   }
 
-  // Pass ingredient count for niche advantage calculation in opportunity score
-  const contentGap = calculateContentGap(marketMetrics, qualityDistribution, freshnessAnalysis, ingredients.length, trendsBoost);
+  // Pass ingredient count and sample size for niche advantage calculation in opportunity score
+  const contentGap = calculateContentGap(marketMetrics, qualityDistribution, freshnessAnalysis, ingredients.length, relevantVideos.length, trendsBoost);
   const { score, band } = calculateDemandScore(marketMetrics, contentGap, freshnessAnalysis, trendsBoost);
   const opportunities = generateOpportunities(marketMetrics, qualityDistribution, freshnessAnalysis, contentGap, trendsBoost);
 

@@ -1,11 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { trpc } from '@/app/providers'
 import { SearchInput } from './SearchInput'
 import { SearchResults } from './SearchResults'
 import { HeroFoodDecorations } from './FoodIllustrations'
 import { TrendingIngredients } from './TrendingIngredients'
+
+const SEARCH_HISTORY_KEY = 'kitvas-search-history'
+const MAX_HISTORY_ITEMS = 5
+
+// Type for search history entries
+type SearchHistoryEntry = {
+  ingredients: string[]
+  timestamp: number
+}
 
 export function SearchPage() {
   const [ingredients, setIngredients] = useState<string[]>([])
@@ -13,6 +22,50 @@ export function SearchPage() {
   // Separate state for committed search - only updates when user explicitly triggers search
   const [searchIngredients, setSearchIngredients] = useState<string[]>([])
   const [searchTags, setSearchTags] = useState<string[]>([])
+  // Recent searches from localStorage
+  const [recentSearches, setRecentSearches] = useState<string[][]>([])
+
+  // Load search history from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SEARCH_HISTORY_KEY)
+      if (stored) {
+        const history: SearchHistoryEntry[] = JSON.parse(stored)
+        // Extract just the ingredients arrays, most recent first
+        setRecentSearches(history.map(h => h.ingredients))
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [])
+
+  // Save search to history
+  const saveToHistory = (newIngredients: string[]) => {
+    if (newIngredients.length === 0) return
+
+    try {
+      const stored = localStorage.getItem(SEARCH_HISTORY_KEY)
+      let history: SearchHistoryEntry[] = stored ? JSON.parse(stored) : []
+
+      // Remove duplicate if exists (same ingredients in same order)
+      const key = newIngredients.join(',').toLowerCase()
+      history = history.filter(h => h.ingredients.join(',').toLowerCase() !== key)
+
+      // Add new entry at the beginning
+      history.unshift({
+        ingredients: newIngredients,
+        timestamp: Date.now()
+      })
+
+      // Keep only the most recent entries
+      history = history.slice(0, MAX_HISTORY_ITEMS)
+
+      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history))
+      setRecentSearches(history.map(h => h.ingredients))
+    } catch {
+      // Ignore localStorage errors
+    }
+  }
 
   const searchQuery = trpc.search.search.useQuery(
     {
@@ -21,6 +74,8 @@ export function SearchPage() {
     },
     {
       enabled: searchIngredients.length > 0,
+      staleTime: 4 * 60 * 60 * 1000, // Cache for 4 hours
+      gcTime: 4 * 60 * 60 * 1000, // Keep in cache for 4 hours
     }
   )
 
@@ -28,6 +83,7 @@ export function SearchPage() {
     if (ingredients.length > 0) {
       setSearchIngredients([...ingredients])
       setSearchTags([...tags])
+      saveToHistory([...ingredients])
     }
   }
 
@@ -69,6 +125,16 @@ export function SearchPage() {
               tags={tags}
               onTagsChange={setTags}
               onSearch={handleSearch}
+              onClear={() => {
+                setSearchIngredients([])
+                setSearchTags([])
+              }}
+              recentSearches={hasSearched ? [] : recentSearches.slice(0, 2)}
+              onSelectRecentSearch={(recent) => {
+                setIngredients(recent)
+                setSearchIngredients(recent)
+                setSearchTags([])
+              }}
             />
           </div>
 

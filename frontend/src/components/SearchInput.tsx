@@ -21,6 +21,9 @@ interface SearchInputProps {
   tags: string[]
   onTagsChange: (tags: string[]) => void
   onSearch: () => void
+  onClear?: () => void
+  recentSearches?: string[][]
+  onSelectRecentSearch?: (ingredients: string[]) => void
 }
 
 export function SearchInput({
@@ -29,6 +32,9 @@ export function SearchInput({
   tags,
   onTagsChange,
   onSearch,
+  onClear,
+  recentSearches = [],
+  onSelectRecentSearch,
 }: SearchInputProps) {
   const [inputValue, setInputValue] = useState('')
   const [showFilters, setShowFilters] = useState(false)
@@ -50,16 +56,38 @@ export function SearchInput({
     }
   )
 
+  // Trending ingredients query (for dropdown when empty)
+  const { data: trendingData } = trpc.analytics.hotIngredients.useQuery(
+    { period: 'today', limit: 6 },
+    {
+      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    }
+  )
+
   // Filter out already selected ingredients
   const filteredSuggestions = suggestions.filter(
     (s) => !ingredients.includes(s)
   )
 
-  // Show/hide suggestions based on input and results
+  // Filter trending ingredients (exclude already selected)
+  const trendingIngredients = (trendingData?.ingredients || []).filter(
+    (t) => !ingredients.includes(t.name)
+  )
+
+  // Show/hide suggestions based on input and results (or recent searches when empty)
   useEffect(() => {
-    setShowSuggestions(filteredSuggestions.length > 0 && currentWord.length > 0)
+    const hasContent = filteredSuggestions.length > 0 && currentWord.length > 0
+    // Don't auto-show on mount, only update when typing
+    if (currentWord.length > 0) {
+      setShowSuggestions(hasContent)
+    }
     setHighlightedIndex(-1)
   }, [filteredSuggestions.length, currentWord])
+
+  // Calculate total items for keyboard navigation
+  const trendingCount = currentWord.length === 0 ? trendingIngredients.length : 0
+  const recentCount = currentWord.length === 0 ? recentSearches.length : 0
+  const totalDropdownItems = recentCount + trendingCount + filteredSuggestions.length
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -91,11 +119,11 @@ export function SearchInput({
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    // Handle suggestion navigation
-    if (showSuggestions && filteredSuggestions.length > 0) {
+    // Handle suggestion/recent search navigation
+    if (showSuggestions && totalDropdownItems > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        setHighlightedIndex((i) => Math.min(i + 1, filteredSuggestions.length - 1))
+        setHighlightedIndex((i) => Math.min(i + 1, totalDropdownItems - 1))
         return
       }
       if (e.key === 'ArrowUp') {
@@ -105,7 +133,20 @@ export function SearchInput({
       }
       if (e.key === 'Enter' && highlightedIndex >= 0) {
         e.preventDefault()
-        selectSuggestion(filteredSuggestions[highlightedIndex])
+        // Check if selecting a recent search, trending, or suggestion
+        if (highlightedIndex < recentCount) {
+          // Selecting a recent search
+          onSelectRecentSearch?.(recentSearches[highlightedIndex])
+          setShowSuggestions(false)
+        } else if (highlightedIndex < recentCount + trendingCount) {
+          // Selecting a trending ingredient
+          const trendingIndex = highlightedIndex - recentCount
+          addIngredients(trendingIngredients[trendingIndex].name)
+          setShowSuggestions(false)
+        } else {
+          // Selecting a suggestion
+          selectSuggestion(filteredSuggestions[highlightedIndex - recentCount - trendingCount])
+        }
         return
       }
       if (e.key === 'Escape') {
@@ -114,7 +155,16 @@ export function SearchInput({
       }
       if (e.key === 'Tab' && highlightedIndex >= 0) {
         e.preventDefault()
-        selectSuggestion(filteredSuggestions[highlightedIndex])
+        if (highlightedIndex < recentCount) {
+          onSelectRecentSearch?.(recentSearches[highlightedIndex])
+          setShowSuggestions(false)
+        } else if (highlightedIndex < recentCount + trendingCount) {
+          const trendingIndex = highlightedIndex - recentCount
+          addIngredients(trendingIngredients[trendingIndex].name)
+          setShowSuggestions(false)
+        } else {
+          selectSuggestion(filteredSuggestions[highlightedIndex - recentCount - trendingCount])
+        }
         return
       }
     }
@@ -126,6 +176,7 @@ export function SearchInput({
       } else if (ingredients.length > 0) {
         // Trigger search when Enter is pressed with empty input
         onSearch()
+        setShowSuggestions(false)
       }
     }
     if (e.key === ' ' && inputValue.trim() && !inputValue.endsWith(',') && !inputValue.endsWith(', ')) {
@@ -136,6 +187,10 @@ export function SearchInput({
 
   const clearAllIngredients = () => {
     onIngredientsChange([])
+    onTagsChange([])
+    setInputValue('')
+    setShowFilters(false)
+    onClear?.()
   }
 
   const addIngredients = (input: string) => {
@@ -206,7 +261,9 @@ export function SearchInput({
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onFocus={() => {
-                  if (filteredSuggestions.length > 0 && currentWord.length > 0) {
+                  // Show dropdown if there are suggestions, recent searches, or trending available
+                  if ((filteredSuggestions.length > 0 && currentWord.length > 0) ||
+                      ((recentSearches.length > 0 || trendingIngredients.length > 0) && currentWord.length === 0)) {
                     setShowSuggestions(true)
                   }
                 }}
@@ -245,7 +302,10 @@ export function SearchInput({
               {/* Search Button */}
               {ingredients.length > 0 && (
                 <button
-                  onClick={onSearch}
+                  onClick={() => {
+                    onSearch()
+                    setShowSuggestions(false)
+                  }}
                   className="px-4 py-2.5 bg-[#10B981] text-white rounded-xl font-medium hover:bg-[#059669] transition-colors flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -259,31 +319,118 @@ export function SearchInput({
         </div>
 
         {/* Autocomplete Dropdown */}
-        {showSuggestions && filteredSuggestions.length > 0 && (
+        {showSuggestions && (filteredSuggestions.length > 0 || ((recentSearches.length > 0 || trendingIngredients.length > 0) && currentWord.length === 0)) && (
           <div
             ref={suggestionsRef}
             className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-auto"
           >
-            {filteredSuggestions.map((suggestion, index) => (
-              <button
-                key={suggestion}
-                type="button"
-                className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
-                  index === highlightedIndex
-                    ? 'bg-[#10B981]/10 text-[#10B981]'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-                onClick={() => selectSuggestion(suggestion)}
-                onMouseEnter={() => setHighlightedIndex(index)}
-              >
-                <span className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-                  </svg>
-                  {suggestion}
-                </span>
-              </button>
-            ))}
+            {/* Recent Searches - show when input is empty */}
+            {currentWord.length === 0 && recentSearches.length > 0 && (
+              <>
+                <div className="px-4 py-2 text-xs font-medium text-gray-500 bg-gray-50 border-b border-gray-100">
+                  Recent Searches
+                </div>
+                {recentSearches.map((recent, index) => (
+                  <button
+                    key={`recent-${index}`}
+                    type="button"
+                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                      index === highlightedIndex
+                        ? 'bg-[#10B981]/10 text-[#10B981]'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                    onClick={() => onSelectRecentSearch?.(recent)}
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="flex gap-1.5">
+                        {recent.map((ing, i) => (
+                          <span key={i} className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">
+                            {ing}
+                          </span>
+                        ))}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </>
+            )}
+            {/* Trending Ingredients - show when input is empty */}
+            {currentWord.length === 0 && trendingIngredients.length > 0 && (
+              <>
+                <div className={`px-4 py-2 text-xs font-medium text-gray-500 bg-gray-50 border-b border-gray-100 ${recentSearches.length > 0 ? 'border-t' : ''}`}>
+                  <span className="flex items-center gap-1.5">
+                    <span>🔥</span> Trending Today
+                  </span>
+                </div>
+                {trendingIngredients.map((trending, index) => {
+                  const adjustedIndex = recentCount + index
+                  return (
+                    <button
+                      key={`trending-${trending.name}`}
+                      type="button"
+                      className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                        adjustedIndex === highlightedIndex
+                          ? 'bg-[#10B981]/10 text-[#10B981]'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                      onClick={() => {
+                        addIngredients(trending.name)
+                        setShowSuggestions(false)
+                      }}
+                      onMouseEnter={() => setHighlightedIndex(adjustedIndex)}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 flex items-center justify-center text-xs text-orange-500 font-bold">
+                          {index + 1}
+                        </span>
+                        <span className="capitalize">{trending.name}</span>
+                        {trending.isBreakout && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-600 rounded">
+                            BREAKOUT
+                          </span>
+                        )}
+                        {trending.growth > 10 && !trending.isBreakout && (
+                          <span className="text-xs text-green-600">↑{trending.growth}%</span>
+                        )}
+                      </span>
+                    </button>
+                  )
+                })}
+              </>
+            )}
+            {/* Ingredient Suggestions */}
+            {filteredSuggestions.length > 0 && currentWord.length > 0 && (
+              <div className="px-4 py-2 text-xs font-medium text-gray-500 bg-gray-50 border-b border-gray-100">
+                Suggestions
+              </div>
+            )}
+            {filteredSuggestions.map((suggestion, index) => {
+              const adjustedIndex = currentWord.length === 0 ? index + recentCount + trendingCount : index
+              return (
+                <button
+                  key={suggestion}
+                  type="button"
+                  className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                    adjustedIndex === highlightedIndex
+                      ? 'bg-[#10B981]/10 text-[#10B981]'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                  onClick={() => selectSuggestion(suggestion)}
+                  onMouseEnter={() => setHighlightedIndex(adjustedIndex)}
+                >
+                  <span className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                    </svg>
+                    {suggestion}
+                  </span>
+                </button>
+              )
+            })}
           </div>
         )}
 
