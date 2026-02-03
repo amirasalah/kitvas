@@ -120,8 +120,24 @@ model Ingredient {
   videoIngredients VideoIngredient[]
   corrections      Correction[]
   trends           IngredientTrend[]
+  synonyms         IngredientSynonym[]
 
   @@index([name])
+}
+
+// Stores ingredient synonyms/aliases for autocomplete and normalization
+model IngredientSynonym {
+  id           String     @id @default(cuid())
+  ingredientId String
+  synonym      String     // e.g., "chickens", "chiken" for "chicken"
+  source       String     @default("manual") // 'manual' | 'wikidata' | 'user'
+  createdAt    DateTime   @default(now())
+
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@unique([ingredientId, synonym])
+  @@index([synonym])
+  @@index([ingredientId])
 }
 
 model VideoIngredient {
@@ -355,4 +371,25 @@ model GoogleTrendsJobLog {
   @@index([createdAt])
   @@index([status])
   @@index([jobType])
+}
+
+// ============================================================================
+// Ingredient Fetch Job Models
+// ============================================================================
+
+// Tracks ingredient fetching jobs from external sources
+model IngredientFetchJob {
+  id              String   @id @default(cuid())
+  source          String   // 'wikidata' | 'openfoodfacts' | 'manual'
+  status          String   // 'started' | 'completed' | 'failed'
+  newIngredients  Int?     // Number of new ingredients added
+  newSynonyms     Int?     // Number of new synonyms added
+  skipped         Int?     // Already existing items
+  errorMessage    String?  @db.Text
+  duration        Int?     // Duration in seconds
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([source])
 }

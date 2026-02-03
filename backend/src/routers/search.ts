@@ -63,7 +63,7 @@ export const searchRouter = t.router({
       const { query } = input;
       const normalizedQuery = query.toLowerCase().trim();
 
-      // Search database for matching ingredients
+      // Search database for matching ingredients by canonical name
       const dbIngredients = await ctx.prisma.ingredient.findMany({
         where: {
           name: {
@@ -79,16 +79,38 @@ export const searchRouter = t.router({
         },
       });
 
-      // Also search the synonym map for aliases
+      // Search database for matching synonyms and return their canonical names
+      const dbSynonyms = await ctx.prisma.ingredientSynonym.findMany({
+        where: {
+          synonym: {
+            contains: normalizedQuery,
+          },
+        },
+        take: 15,
+        include: {
+          ingredient: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+
+      // Also search the static synonym map for aliases (fallback for ingredients not yet in DB)
       const synonymMatches = getSynonymMatches(normalizedQuery, 15);
 
       // Combine and dedupe results, prioritizing prefix matches
       const allMatches = new Set<string>();
 
-      // First add prefix matches (from both sources)
+      // First add prefix matches (from all sources)
       for (const ing of dbIngredients) {
         if (ing.name.startsWith(normalizedQuery)) {
           allMatches.add(ing.name);
+        }
+      }
+      for (const syn of dbSynonyms) {
+        if (syn.ingredient.name.startsWith(normalizedQuery) || syn.synonym.startsWith(normalizedQuery)) {
+          allMatches.add(syn.ingredient.name);
         }
       }
       for (const name of synonymMatches) {
@@ -100,6 +122,9 @@ export const searchRouter = t.router({
       // Then add contains matches
       for (const ing of dbIngredients) {
         allMatches.add(ing.name);
+      }
+      for (const syn of dbSynonyms) {
+        allMatches.add(syn.ingredient.name);
       }
       for (const name of synonymMatches) {
         allMatches.add(name);

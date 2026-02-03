@@ -82,6 +82,15 @@ export const scheduledJobs: ScheduledJob[] = [
     enabled: true,
     timeout: 20 * 60 * 1000, // 20 minutes
   },
+
+  {
+    name: 'fetch-ingredients',
+    description: 'Fetch new ingredients and synonyms from Wikidata',
+    schedule: '0 6 * * 3', // Weekly on Wednesdays at 6:00 AM UTC
+    script: 'src/scripts/fetch-wikidata-ingredients.ts',
+    enabled: true,
+    timeout: 15 * 60 * 1000, // 15 minutes
+  },
 ];
 
 /**

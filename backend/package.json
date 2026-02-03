@@ -22,6 +22,8 @@
     "calibrate:opportunities": "tsx src/scripts/calibrate-opportunities.ts",
     "populate:trends": "tsx src/scripts/populate-ingredient-trends.ts",
     "audit:data": "tsx src/scripts/audit-data.ts",
+    "ingredients:fetch": "tsx src/scripts/fetch-wikidata-ingredients.ts",
+    "ingredients:migrate": "tsx scripts/migrate-synonyms-to-db.ts",
     "scheduler": "tsx src/cron/scheduler.ts start",
     "scheduler:once": "tsx src/cron/scheduler.ts once",
     "scheduler:list": "tsx src/cron/scheduler.ts list",
