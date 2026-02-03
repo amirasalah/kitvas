@@ -240,76 +240,210 @@ function calculateFreshnessAnalysis(videos: YouTubeVideo[]): FreshnessAnalysis {
   };
 }
 
+/**
+ * Calculate Competition Barrier Score (0-100)
+ * Higher score = HARDER to compete
+ *
+ * Components:
+ * - viewBarrier (40%): Based on avgViews - high views = established competition
+ * - incumbentAdvantage (30%): Based on % recent videos - few recent = old content dominates
+ * - supplyPressure (20%): Based on video count - more videos = more competition
+ * - algorithmLockIn (10%): If old content dominates AND few recent videos
+ */
+function calculateCompetitionBarrier(
+  metrics: MarketMetrics,
+  freshness: FreshnessAnalysis
+): number {
+  let barrier = 0;
+
+  // View barrier (0-40 points)
+  // High avgViews = established videos dominate = BARRIER, not opportunity
+  if (metrics.avgViews >= 1000000) barrier += 40;
+  else if (metrics.avgViews >= 500000) barrier += 35;
+  else if (metrics.avgViews >= 100000) barrier += 30;
+  else if (metrics.avgViews >= 50000) barrier += 20;
+  else if (metrics.avgViews >= 10000) barrier += 10;
+
+  // Incumbent advantage (0-30 points)
+  // Few recent videos = algorithm locked to old content = harder to break in
+  const recentRatio = metrics.videoCount > 0
+    ? freshness.recentVideoCount / metrics.videoCount
+    : 0;
+  if (recentRatio < 0.1) barrier += 30;      // <10% recent = old dominates
+  else if (recentRatio < 0.2) barrier += 20; // 10-20%
+  else if (recentRatio < 0.4) barrier += 10; // 20-40%
+  // >40% recent = new content wins, no barrier added
+
+  // Supply pressure (0-20 points)
+  // More videos = more competition for ranking
+  if (metrics.videoCount > 50) barrier += 20;
+  else if (metrics.videoCount > 30) barrier += 15;
+  else if (metrics.videoCount > 15) barrier += 10;
+  else if (metrics.videoCount > 5) barrier += 5;
+
+  // Algorithm lock-in (0-10 points)
+  // Old average age + few recent = YouTube locked to incumbents
+  if (freshness.avgAgeDays > 365 && freshness.recentVideoCount < 3) {
+    barrier += 10;
+  }
+
+  return Math.min(100, barrier);
+}
+
+/**
+ * Calculate Opportunity Score (0-100)
+ * Higher score = BETTER opportunity for new creators
+ *
+ * Components:
+ * - accessibilityScore (35%): Inverse of barrier - lower barrier = more accessible
+ * - demandValidation (25%): avgViews proves audience exists
+ * - timingBonus (25%): Google Trends growth, recent videos outperforming
+ * - nicheAdvantage (15%): Multi-ingredient searches, low video count
+ */
+function calculateOpportunityScore(
+  metrics: MarketMetrics,
+  freshness: FreshnessAnalysis,
+  barrier: number,
+  ingredientCount: number,
+  trendsBoost?: TrendsBoost
+): number {
+  let score = 0;
+
+  // Accessibility (0-35 points) - inverse of barrier
+  if (barrier <= 20) score += 35;      // Very accessible
+  else if (barrier <= 40) score += 28;
+  else if (barrier <= 60) score += 18;
+  else if (barrier <= 80) score += 8;
+  // >80 barrier = 0 accessibility points
+
+  // Demand validation (0-25 points)
+  // Some avgViews proves people watch this content
+  if (metrics.avgViews >= 50000) score += 25;
+  else if (metrics.avgViews >= 20000) score += 20;
+  else if (metrics.avgViews >= 10000) score += 15;
+  else if (metrics.avgViews >= 5000) score += 10;
+  else score += 5;
+
+  // Timing bonus (0-25 points)
+  let timingBonus = 0;
+  if (trendsBoost?.isBreakout) {
+    timingBonus += 15;
+  } else if (trendsBoost && trendsBoost.weekOverWeekGrowth > 30) {
+    timingBonus += 10;
+  } else if (trendsBoost && trendsBoost.weekOverWeekGrowth > 10) {
+    timingBonus += 5;
+  }
+
+  // Recent content outperforming = new videos can win
+  if (freshness.recentVideoAvgViews > metrics.avgViews * 1.2) {
+    timingBonus += 10;
+  }
+  score += Math.min(25, timingBonus);
+
+  // Niche advantage (0-15 points)
+  if (ingredientCount >= 3) score += 10;      // 3+ ingredients = long-tail
+  else if (ingredientCount >= 2) score += 5;  // 2 ingredients = some specificity
+
+  // True underserved: few videos but validated demand
+  if (metrics.videoCount < 10 && metrics.avgViews >= 10000) {
+    score += 5;
+  }
+
+  return Math.min(100, score);
+}
+
+/**
+ * Classify market based on barrier and opportunity scores
+ */
+function classifyMarket(
+  barrier: number,
+  opportunity: number,
+  freshness: FreshnessAnalysis,
+  trendsBoost?: TrendsBoost
+): { type: ContentGapType; reasoning: string } {
+  // Calculate timing bonus for emerging detection
+  let timingBonus = 0;
+  if (trendsBoost?.isBreakout) timingBonus += 15;
+  else if (trendsBoost && trendsBoost.weekOverWeekGrowth > 30) timingBonus += 10;
+  if (freshness.recentVideoAvgViews > 0 && freshness.isEmergingTopic) timingBonus += 10;
+
+  // SATURATED: High barrier (>60) regardless of opportunity
+  if (barrier > 60) {
+    return {
+      type: 'saturated',
+      reasoning: 'High competition - established content dominates rankings'
+    };
+  }
+
+  // HIGH_BARRIER: Moderate-high barrier (40-60) with low opportunity (<40)
+  if (barrier > 40 && opportunity < 40) {
+    return {
+      type: 'saturated',
+      reasoning: 'Difficult market - significant barrier to compete'
+    };
+  }
+
+  // EMERGING: High opportunity with timing bonus
+  if (opportunity > 60 && timingBonus >= 15) {
+    return {
+      type: 'emerging',
+      reasoning: 'Emerging trend - time-sensitive opportunity'
+    };
+  }
+
+  // OPPORTUNITY: Low barrier (<40) with good opportunity (>50)
+  if (barrier < 40 && opportunity > 50) {
+    return {
+      type: 'underserved',
+      reasoning: 'Good opportunity - validated demand with accessible competition'
+    };
+  }
+
+  // NICHE_OPPORTUNITY: Very low barrier (<30) with moderate opportunity (>=30)
+  if (barrier < 30 && opportunity >= 30) {
+    return {
+      type: 'underserved',
+      reasoning: 'Niche opportunity - smaller audience but very accessible'
+    };
+  }
+
+  // BALANCED: Everything else
+  return {
+    type: 'balanced',
+    reasoning: 'Moderate competition with uncertain opportunity'
+  };
+}
+
+/**
+ * Calculate content gap using the new barrier/opportunity model
+ */
 function calculateContentGap(
   metrics: MarketMetrics,
   quality: QualityDistribution,
-  freshness: FreshnessAnalysis
+  freshness: FreshnessAnalysis,
+  ingredientCount: number = 1,
+  trendsBoost?: TrendsBoost
 ): ContentGap {
-  let score = 50;
-  let type: ContentGapType = 'balanced';
-  const reasons: string[] = [];
+  // Calculate the two key scores
+  const barrier = calculateCompetitionBarrier(metrics, freshness);
+  const opportunity = calculateOpportunityScore(metrics, freshness, barrier, ingredientCount, trendsBoost);
 
-  // Factor 1: View concentration (high outlier ratio = opportunity)
+  // Classify the market
+  const { type, reasoning } = classifyMarket(barrier, opportunity, freshness, trendsBoost);
+
+  // Score is now opportunity-based (higher = better)
+  // But we'll also factor in quality gap for the score
+  let score = opportunity;
+
+  // Quality bonus: high variance means quality can win
   if (quality.outlierRatio > 20) {
-    score += 15;
-    reasons.push('Top videos significantly outperform average');
-  } else if (quality.outlierRatio > 10) {
-    score += 8;
+    score = Math.min(100, score + 10);
   }
-
-  // Factor 2: Supply vs Demand proxy
-  if (metrics.avgViews > 100000 && metrics.videoCount < 15) {
-    // High views + few videos could be underserved OR saturated
-    // Saturated = very high views (1M+) means established content dominates
-    if (metrics.avgViews >= 500000) {
-      // High avg views (500K+) = saturated market, not opportunity
-      score -= 10;
-      type = 'saturated';
-      reasons.push('Highly competitive market with established content');
-    } else {
-      score += 25;
-      type = 'underserved';
-      reasons.push('High viewer demand but limited quality content');
-    }
-  } else if (metrics.avgViews < 10000 && metrics.videoCount >= 18) {
-    score -= 20;
-    type = 'saturated';
-    reasons.push('Many videos competing for limited interest');
-  }
-
-  // Factor 3: Freshness opportunity
-  if (freshness.isEmergingTopic) {
-    score += 15;
-    if (type === 'balanced') type = 'emerging';
-    reasons.push('Growing topic with increasing content creation');
-  } else if (freshness.recentVideoCount < 3 && metrics.avgViews > 50000) {
-    // Few recent videos + high views: saturated or underserved?
-    // Key: VERY high avg views (500K+) = saturated regardless of video count
-    if (metrics.avgViews >= 500000) {
-      score -= 15;
-      type = 'saturated';
-      reasons.push('Saturated market - established content dominates rankings');
-    } else if (metrics.videoCount < 10) {
-      // Moderate views + few videos = real opportunity
-      score += 20;
-      type = 'underserved';
-      reasons.push('Limited content with strong performance - room to compete');
-    }
-    // 10+ videos with moderate views: leave as balanced
-  }
-
-  // Factor 4: Velocity
-  if (metrics.avgViewsPerDay > 1000) {
-    score += 10;
-    reasons.push('Strong daily engagement');
-  }
-
-  score = Math.max(0, Math.min(100, score));
 
   return {
     score,
     type,
-    reasoning: reasons.length > 0 ? reasons.join('. ') + '.' : 'Balanced competition with moderate opportunity.',
+    reasoning,
   };
 }
 
@@ -380,6 +514,12 @@ function calculateDemandScore(
     band = 'unknown';
   }
 
+  // Cap band for saturated markets
+  // "GROWING" or "HOT" implies opportunity, which is misleading for saturated markets
+  if (gap.type === 'saturated' && (band === 'hot' || band === 'growing')) {
+    band = 'stable';
+  }
+
   return { score, band };
 }
 
@@ -392,8 +532,11 @@ function generateOpportunities(
 ): ContentOpportunity[] {
   const opportunities: ContentOpportunity[] = [];
 
-  // Quality gap opportunity
-  if (quality.outlierRatio > 15 && quality.bottomPerformerViews < quality.topPerformerViews * 0.1) {
+  // IMPORTANT: Don't show opportunity flags for saturated markets
+  const isSaturated = gap.type === 'saturated';
+
+  // Quality gap opportunity - only if market is NOT saturated
+  if (!isSaturated && quality.outlierRatio > 15 && quality.bottomPerformerViews < quality.topPerformerViews * 0.1) {
     opportunities.push({
       type: 'quality_gap',
       title: 'Quality Opportunity',
@@ -402,8 +545,9 @@ function generateOpportunities(
     });
   }
 
-  // Freshness gap opportunity - only for moderate-performing niches, NOT saturated markets
-  if (freshness.recentVideoCount < 3 && metrics.avgViews > 30000 && metrics.avgViews < 500000 && metrics.videoCount < 20) {
+  // Freshness gap opportunity - ONLY for non-saturated markets with genuine opportunity
+  // The gap.type check is critical: saturated markets should NEVER show this
+  if (!isSaturated && gap.type !== 'balanced' && freshness.recentVideoCount < 3 && metrics.avgViews > 30000 && metrics.avgViews < 300000 && metrics.videoCount < 15) {
     opportunities.push({
       type: 'freshness_gap',
       title: 'Content Freshness Gap',
@@ -412,21 +556,31 @@ function generateOpportunities(
     });
   }
 
-  // Underserved market opportunity
+  // Underserved market opportunity - gap.type already computed with barrier/opportunity model
   if (gap.type === 'underserved') {
     opportunities.push({
       type: 'underserved',
-      title: 'Underserved Market',
+      title: 'Good Opportunity',
       description: gap.reasoning,
       priority: 'high',
     });
   }
 
-  // Trending topic opportunity
-  if (freshness.isEmergingTopic && freshness.recentVideoAvgViews > 10000) {
+  // Emerging trend opportunity
+  if (gap.type === 'emerging') {
     opportunities.push({
       type: 'trending',
       title: 'Emerging Trend',
+      description: gap.reasoning,
+      priority: 'high',
+    });
+  }
+
+  // Trending topic based on freshness (backup if not already flagged as emerging)
+  if (!isSaturated && gap.type !== 'emerging' && freshness.isEmergingTopic && freshness.recentVideoAvgViews > 10000) {
+    opportunities.push({
+      type: 'trending',
+      title: 'Growing Topic',
       description: `${freshness.recentVideoCount} recent videos averaging ${formatViews(freshness.recentVideoAvgViews)} views. This topic is gaining momentum.`,
       priority: 'medium',
     });
@@ -531,7 +685,8 @@ export function calculateYouTubeDemandSignal(
   const marketMetrics = calculateMarketMetrics(relevantVideos);
   const qualityDistribution = calculateQualityDistribution(relevantVideos);
   const freshnessAnalysis = calculateFreshnessAnalysis(relevantVideos);
-  const contentGap = calculateContentGap(marketMetrics, qualityDistribution, freshnessAnalysis);
+  // Pass ingredient count for niche advantage calculation in opportunity score
+  const contentGap = calculateContentGap(marketMetrics, qualityDistribution, freshnessAnalysis, ingredients.length, trendsBoost);
   const { score, band } = calculateDemandScore(marketMetrics, contentGap, freshnessAnalysis, trendsBoost);
   const opportunities = generateOpportunities(marketMetrics, qualityDistribution, freshnessAnalysis, contentGap, trendsBoost);
 
