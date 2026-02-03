@@ -17,8 +17,13 @@ export function TrendingIngredients({ onIngredientClick }: TrendingIngredientsPr
     { staleTime: 5 * 60 * 1000 } // Cache for 5 minutes
   )
 
-  // Don't show if no Google Trends data available
-  if (!isLoading && (!data?.hasGoogleTrends || data.ingredients.length === 0)) {
+  // Track if we have any Google Trends data at all (for any period)
+  const hasAnyData = data?.hasGoogleTrends || (data?.ingredients && data.ingredients.length > 0)
+
+  // Don't show if we've never had any Google Trends data
+  // But DO show if we have data for other periods (just not the selected one)
+  if (!isLoading && !hasAnyData && period === 'week') {
+    // Only hide on initial load with 'week' - if user switched periods, keep showing
     return null
   }
 
@@ -76,6 +81,14 @@ export function TrendingIngredients({ onIngredientClick }: TrendingIngredientsPr
       {error && (
         <div className="text-center py-4 text-gray-500">
           <p>Unable to load trending data</p>
+        </div>
+      )}
+
+      {/* Empty State for selected period */}
+      {!isLoading && !error && data && data.ingredients.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          <p className="text-sm">No trending data for {period === 'today' ? 'today' : period === 'week' ? 'this week' : 'this month'} yet.</p>
+          <p className="text-xs mt-1 text-gray-400">Try selecting a different time period.</p>
         </div>
       )}
 

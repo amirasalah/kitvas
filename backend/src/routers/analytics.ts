@@ -34,8 +34,9 @@ export const analyticsRouter = t.router({
       const { period, limit } = input;
 
       // Calculate date range based on period
+      // "today" uses 2 days to ensure we have data even if today's fetch hasn't run yet
       const dateRange = {
-        today: 1,
+        today: 2, // Last 48 hours to catch yesterday's data if today's isn't fetched yet
         week: 7,
         month: 30,
       }[period];
