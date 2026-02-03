@@ -13,6 +13,7 @@ import type {
 } from '@/lib/trpc'
 import { IngredientGaps } from './IngredientGaps'
 import { ContentAngles } from './ContentAngles'
+import { IngredientTrendSparkline } from './IngredientTrendSparkline'
 
 interface SearchResultsProps {
   analyzedVideos: VideoResult[]
@@ -205,6 +206,31 @@ export function SearchResults({
           {/* Content Angles from Google Trends */}
           {ingredients.length >= 1 && (
             <ContentAngles ingredients={ingredients} />
+          )}
+
+          {/* Ingredient Search Trends */}
+          {ingredients.length >= 1 && (
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900">Search Trends</h3>
+                  <p className="text-sm text-gray-500">Internal search activity over time</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {ingredients.map((ingredient) => (
+                  <div key={ingredient} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                    <span className="font-medium text-gray-900 capitalize">{ingredient}</span>
+                    <IngredientTrendSparkline ingredient={ingredient} period="weekly" showLabel />
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
           {/* Opportunities Section */}

@@ -68,6 +68,30 @@ function formatViews(views: number): string {
 }
 
 /**
+ * Check if an ingredient appears in text with flexible matching
+ * Handles compound words like "soy sauce" / "soysauce"
+ */
+function checkIngredientInText(ingredient: string, text: string): boolean {
+  const lowerIng = ingredient.toLowerCase();
+  const lowerText = text.toLowerCase();
+
+  // 1. Direct match
+  if (lowerText.includes(lowerIng)) return true;
+
+  // 2. Try without spaces (e.g., "soy sauce" matches "soysauce" in text)
+  const withoutSpaces = lowerIng.replace(/\s+/g, '');
+  if (withoutSpaces !== lowerIng && lowerText.includes(withoutSpaces)) return true;
+
+  // 3. Check compound parts - "soy sauce" matches if both "soy" and "sauce" appear nearby
+  const parts = lowerIng.split(/\s+/);
+  if (parts.length === 2 && parts.every(part => part.length >= 3 && lowerText.includes(part))) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Calculate how relevant a video is to the searched ingredients
  * Returns 0-1 score based on how many ingredients appear in title/description
  */
@@ -78,7 +102,7 @@ function calculateVideoRelevance(
   if (ingredients.length === 0) return 1;
 
   const text = `${video.snippet.title} ${video.snippet.description}`.toLowerCase();
-  const matchCount = ingredients.filter(ing => text.includes(ing.toLowerCase())).length;
+  const matchCount = ingredients.filter(ing => checkIngredientInText(ing, text)).length;
   return matchCount / ingredients.length;
 }
 
@@ -235,9 +259,18 @@ function calculateContentGap(
 
   // Factor 2: Supply vs Demand proxy
   if (metrics.avgViews > 100000 && metrics.videoCount < 15) {
-    score += 25;
-    type = 'underserved';
-    reasons.push('High viewer demand but limited quality content');
+    // High views + few videos could be underserved OR saturated
+    // Saturated = very high views (1M+) means established content dominates
+    if (metrics.avgViews >= 500000) {
+      // High avg views (500K+) = saturated market, not opportunity
+      score -= 10;
+      type = 'saturated';
+      reasons.push('Highly competitive market with established content');
+    } else {
+      score += 25;
+      type = 'underserved';
+      reasons.push('High viewer demand but limited quality content');
+    }
   } else if (metrics.avgViews < 10000 && metrics.videoCount >= 18) {
     score -= 20;
     type = 'saturated';
@@ -250,9 +283,19 @@ function calculateContentGap(
     if (type === 'balanced') type = 'emerging';
     reasons.push('Growing topic with increasing content creation');
   } else if (freshness.recentVideoCount < 3 && metrics.avgViews > 50000) {
-    score += 20;
-    type = 'underserved';
-    reasons.push('High-performing older content dominates search results');
+    // Few recent videos + high views: saturated or underserved?
+    // Key: VERY high avg views (500K+) = saturated regardless of video count
+    if (metrics.avgViews >= 500000) {
+      score -= 15;
+      type = 'saturated';
+      reasons.push('Saturated market - established content dominates rankings');
+    } else if (metrics.videoCount < 10) {
+      // Moderate views + few videos = real opportunity
+      score += 20;
+      type = 'underserved';
+      reasons.push('Limited content with strong performance - room to compete');
+    }
+    // 10+ videos with moderate views: leave as balanced
   }
 
   // Factor 4: Velocity
@@ -359,8 +402,8 @@ function generateOpportunities(
     });
   }
 
-  // Freshness gap opportunity
-  if (freshness.recentVideoCount < 3 && metrics.avgViews > 30000) {
+  // Freshness gap opportunity - only for moderate-performing niches, NOT saturated markets
+  if (freshness.recentVideoCount < 3 && metrics.avgViews > 30000 && metrics.avgViews < 500000 && metrics.videoCount < 20) {
     opportunities.push({
       type: 'freshness_gap',
       title: 'Content Freshness Gap',
@@ -450,12 +493,11 @@ export function calculateYouTubeDemandSignal(
   }
 
   // Filter to videos matching a sufficient proportion of searched ingredients.
-  // For short ingredient lists (1-3), require ALL ingredients to match -
-  // otherwise a search for "pasta, chocolate" would include generic "pasta" videos
-  // and produce misleading demand signals.
-  // For longer lists (4+), require at least 50%.
+  // Single ingredient: require exact match (100%)
+  // 2-3 ingredients: require 67% (allows 2/3 match since YouTube titles often omit some ingredients)
+  // 4+ ingredients: require 50%
   const relevanceThreshold = ingredients.length <= 3
-    ? 1.0
+    ? (ingredients.length === 1 ? 1.0 : 0.67)
     : 0.5;
   const relevantVideos = videos.filter(video => {
     const relevance = calculateVideoRelevance(video, ingredients);

@@ -20,6 +20,8 @@
     "refresh:views": "tsx src/scripts/refresh-views.ts",
     "aggregate:corrections": "tsx src/scripts/aggregate-corrections.ts",
     "calibrate:opportunities": "tsx src/scripts/calibrate-opportunities.ts",
+    "populate:trends": "tsx src/scripts/populate-ingredient-trends.ts",
+    "audit:data": "tsx src/scripts/audit-data.ts",
     "scheduler": "tsx src/cron/scheduler.ts start",
     "scheduler:once": "tsx src/cron/scheduler.ts once",
     "scheduler:list": "tsx src/cron/scheduler.ts list",

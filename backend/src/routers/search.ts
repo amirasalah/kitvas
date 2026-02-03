@@ -10,6 +10,7 @@ import { extractTagsFromVideo, storeExtractedTags } from '../lib/tag-extractor.j
 import { processBackgroundVideos } from '../lib/background-processor.js';
 import { fetchTranscript } from '../lib/transcript-fetcher.js';
 import { getTrendsBoost } from '../lib/google-trends/fetcher.js';
+import { normalizeIngredient } from '../lib/ingredient-synonyms.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -61,9 +62,9 @@ export const searchRouter = t.router({
       const { ingredients, tags: filterTags } = input;
 
       try {
-        // Normalize ingredient names (lowercase, trim)
+        // Normalize ingredient names through synonym map (handles "soysauce" -> "soy sauce", etc.)
         const normalizedIngredients = ingredients.map((ing) =>
-          ing.toLowerCase().trim()
+          normalizeIngredient(ing.toLowerCase().trim())
         );
         const normalizedTags = filterTags?.map((t) => t.toLowerCase().trim()) || [];
 

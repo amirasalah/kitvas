@@ -443,6 +443,112 @@ export const analyticsRouter = t.router({
     }),
 
   /**
+   * Get per-ingredient extraction accuracy
+   * Calculated from user corrections: (right - wrong) / total
+   */
+  ingredientAccuracy: t.procedure
+    .input(
+      z.object({
+        minCorrections: z.number().min(1).default(3),
+        limit: z.number().min(1).max(100).default(50),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const { minCorrections, limit } = input;
+
+      // Get correction counts by ingredient
+      const correctionStats = await ctx.prisma.correction.groupBy({
+        by: ['ingredientId', 'action'],
+        _count: { id: true },
+      });
+
+      // Aggregate by ingredient
+      const ingredientStats = new Map<string, { right: number; wrong: number; add: number; rename: number }>();
+
+      for (const stat of correctionStats) {
+        if (!ingredientStats.has(stat.ingredientId)) {
+          ingredientStats.set(stat.ingredientId, { right: 0, wrong: 0, add: 0, rename: 0 });
+        }
+        const stats = ingredientStats.get(stat.ingredientId)!;
+        if (stat.action === 'right') stats.right = stat._count.id;
+        else if (stat.action === 'wrong') stats.wrong = stat._count.id;
+        else if (stat.action === 'add') stats.add = stat._count.id;
+        else if (stat.action === 'rename') stats.rename = stat._count.id;
+      }
+
+      // Filter to ingredients with minimum corrections and calculate accuracy
+      const ingredientIds = Array.from(ingredientStats.entries())
+        .filter(([_, stats]) => stats.right + stats.wrong >= minCorrections)
+        .map(([id]) => id);
+
+      if (ingredientIds.length === 0) {
+        return {
+          minCorrections,
+          ingredients: [],
+          summary: {
+            totalWithFeedback: 0,
+            avgAccuracy: null,
+            needsAttention: [],
+          },
+        };
+      }
+
+      // Get ingredient names
+      const ingredients = await ctx.prisma.ingredient.findMany({
+        where: { id: { in: ingredientIds } },
+        select: { id: true, name: true },
+      });
+
+      const nameMap = new Map(ingredients.map((i) => [i.id, i.name]));
+
+      // Build results
+      const results = ingredientIds
+        .map((id) => {
+          const stats = ingredientStats.get(id)!;
+          const total = stats.right + stats.wrong;
+          const accuracy = total > 0 ? stats.right / total : null;
+
+          return {
+            ingredientId: id,
+            name: nameMap.get(id) || 'Unknown',
+            rightCount: stats.right,
+            wrongCount: stats.wrong,
+            addCount: stats.add,
+            renameCount: stats.rename,
+            totalCorrections: stats.right + stats.wrong + stats.add + stats.rename,
+            accuracy,
+          };
+        })
+        .filter((r) => r.accuracy !== null)
+        .sort((a, b) => (a.accuracy || 0) - (b.accuracy || 0)) // Worst first
+        .slice(0, limit);
+
+      // Calculate summary
+      const accuracies = results.map((r) => r.accuracy!).filter((a) => a !== null);
+      const avgAccuracy = accuracies.length > 0
+        ? accuracies.reduce((a, b) => a + b, 0) / accuracies.length
+        : null;
+
+      const needsAttention = results
+        .filter((r) => r.accuracy !== null && r.accuracy < 0.7)
+        .slice(0, 10)
+        .map((r) => r.name);
+
+      return {
+        minCorrections,
+        ingredients: results.map((r) => ({
+          ...r,
+          accuracy: r.accuracy !== null ? Math.round(r.accuracy * 100) / 100 : null,
+        })),
+        summary: {
+          totalWithFeedback: results.length,
+          avgAccuracy: avgAccuracy !== null ? Math.round(avgAccuracy * 100) / 100 : null,
+          needsAttention,
+        },
+      };
+    }),
+
+  /**
    * Get extraction accuracy metrics
    * Shows current precision/recall/F1 and historical trend
    */
@@ -658,6 +764,168 @@ export const analyticsRouter = t.router({
           suggestedName: c.suggestedName,
           createdAt: c.createdAt,
         })),
+      };
+    }),
+
+  /**
+   * Get ingredient trend history (sparkline data)
+   * Returns search and video counts over time for an ingredient
+   */
+  ingredientTrends: t.procedure
+    .input(
+      z.object({
+        ingredient: z.string().min(1),
+        period: z.enum(['daily', 'weekly', 'monthly']).default('weekly'),
+        limit: z.number().min(1).max(52).default(12), // Up to 52 weeks
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const { ingredient, period, limit } = input;
+      const normalizedIngredient = ingredient.toLowerCase().trim();
+
+      // Find the ingredient
+      const ingredientRecord = await ctx.prisma.ingredient.findUnique({
+        where: { name: normalizedIngredient },
+      });
+
+      if (!ingredientRecord) {
+        return {
+          ingredient: normalizedIngredient,
+          found: false,
+          trends: [],
+          summary: null,
+        };
+      }
+
+      // Get trend data sorted by period
+      const trends = await ctx.prisma.ingredientTrend.findMany({
+        where: {
+          ingredientId: ingredientRecord.id,
+          period,
+        },
+        orderBy: { periodStart: 'desc' },
+        take: limit,
+      });
+
+      // Reverse to get chronological order
+      trends.reverse();
+
+      // Calculate summary stats
+      const totalSearches = trends.reduce((sum, t) => sum + t.searchCount, 0);
+      const totalVideos = trends.reduce((sum, t) => sum + t.videoCount, 0);
+      const avgViews = trends.filter((t) => t.avgViews !== null).length > 0
+        ? Math.round(
+            trends.reduce((sum, t) => sum + (t.avgViews || 0), 0) /
+              trends.filter((t) => t.avgViews !== null).length
+          )
+        : null;
+
+      // Calculate trend direction (last 4 periods vs previous 4)
+      let trendDirection: 'up' | 'down' | 'stable' = 'stable';
+      if (trends.length >= 8) {
+        const recent = trends.slice(-4).reduce((sum, t) => sum + t.searchCount, 0);
+        const previous = trends.slice(-8, -4).reduce((sum, t) => sum + t.searchCount, 0);
+        if (recent > previous * 1.2) trendDirection = 'up';
+        else if (recent < previous * 0.8) trendDirection = 'down';
+      }
+
+      return {
+        ingredient: normalizedIngredient,
+        found: true,
+        period,
+        trends: trends.map((t) => ({
+          periodStart: t.periodStart.toISOString(),
+          searchCount: t.searchCount,
+          videoCount: t.videoCount,
+          avgViews: t.avgViews,
+        })),
+        summary: {
+          totalSearches,
+          totalVideos,
+          avgViews,
+          trendDirection,
+          periodsTracked: trends.length,
+        },
+      };
+    }),
+
+  /**
+   * Get top trending ingredients by search velocity
+   * Returns ingredients with highest search count growth
+   */
+  topIngredientTrends: t.procedure
+    .input(
+      z.object({
+        period: z.enum(['daily', 'weekly', 'monthly']).default('weekly'),
+        limit: z.number().min(1).max(50).default(20),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const { period, limit } = input;
+
+      // Get the most recent period start for this period type
+      const latestTrend = await ctx.prisma.ingredientTrend.findFirst({
+        where: { period },
+        orderBy: { periodStart: 'desc' },
+        select: { periodStart: true },
+      });
+
+      if (!latestTrend) {
+        return {
+          period,
+          periodStart: null,
+          ingredients: [],
+        };
+      }
+
+      // Get all trends for the latest period, sorted by search count
+      const trends = await ctx.prisma.ingredientTrend.findMany({
+        where: {
+          period,
+          periodStart: latestTrend.periodStart,
+        },
+        orderBy: { searchCount: 'desc' },
+        take: limit,
+        include: {
+          ingredient: {
+            select: { name: true },
+          },
+        },
+      });
+
+      // Get previous period data for growth calculation
+      const previousPeriodStart = new Date(latestTrend.periodStart);
+      if (period === 'daily') previousPeriodStart.setDate(previousPeriodStart.getDate() - 1);
+      else if (period === 'weekly') previousPeriodStart.setDate(previousPeriodStart.getDate() - 7);
+      else previousPeriodStart.setMonth(previousPeriodStart.getMonth() - 1);
+
+      const previousTrends = await ctx.prisma.ingredientTrend.findMany({
+        where: {
+          period,
+          periodStart: previousPeriodStart,
+          ingredientId: { in: trends.map((t) => t.ingredientId) },
+        },
+      });
+
+      const previousMap = new Map(previousTrends.map((t) => [t.ingredientId, t.searchCount]));
+
+      return {
+        period,
+        periodStart: latestTrend.periodStart.toISOString(),
+        ingredients: trends.map((t) => {
+          const previousCount = previousMap.get(t.ingredientId) || 0;
+          const growth = previousCount > 0
+            ? Math.round(((t.searchCount - previousCount) / previousCount) * 100)
+            : t.searchCount > 0 ? 100 : 0;
+
+          return {
+            name: t.ingredient.name,
+            searchCount: t.searchCount,
+            videoCount: t.videoCount,
+            avgViews: t.avgViews,
+            growth,
+          };
+        }),
       };
     }),
 
