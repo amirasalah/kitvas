@@ -11,8 +11,8 @@ const GapsInputSchema = z.object({
 
 export interface IngredientGap {
   ingredient: string;
-  searchCount: number;
-  videoCount: number;
+  coOccurrenceCount: number; // How many high-performing videos pair this ingredient
+  videoCount: number; // Total videos with base + this ingredient
   gapScore: number;
   demandBand: string | null;
   trendsInsight: string | null;
@@ -21,8 +21,17 @@ export interface IngredientGap {
 }
 
 /**
- * Find ingredient combinations that are frequently searched
- * but have few videos - these are content opportunities.
+ * Find ingredient pairing opportunities based on successful recipe videos.
+ *
+ * Strategy: Analyze high-performing videos that contain the searched ingredients
+ * and find what other ingredients are commonly paired with them. This gives
+ * recipe-level co-occurrence data (what ingredients actually work together)
+ * rather than search-level data (what people searched for together).
+ *
+ * Gap Score Formula:
+ * - High co-occurrence in successful videos = proven pairing
+ * - Low total video count for the combination = content opportunity
+ * - Google Trends boost for trending ingredients
  */
 export const gapsRouter = t.router({
   findGaps: t.procedure
@@ -31,189 +40,174 @@ export const gapsRouter = t.router({
       const { ingredients } = input;
       const normalizedIngredients = ingredients.map(i => i.toLowerCase().trim());
 
-      // 1. Find all searches that contain ALL base ingredients
-      const relatedSearches = await ctx.prisma.search.findMany({
-        where: {
-          ingredients: { hasEvery: normalizedIngredients },
-        },
-        select: { ingredients: true },
-      });
-
-      // If insufficient search data, fall back to video co-occurrence
-      if (relatedSearches.length < 5) {
-        return findGapsFromVideoData(ctx, normalizedIngredients);
-      }
-
-      // 2. Count co-occurring ingredients (excluding base ingredients)
-      const coOccurrences = new Map<string, number>();
-      for (const search of relatedSearches) {
-        for (const ing of search.ingredients) {
-          if (!normalizedIngredients.includes(ing)) {
-            coOccurrences.set(ing, (coOccurrences.get(ing) || 0) + 1);
-          }
-        }
-      }
-
-      // 3. For each co-occurring ingredient, check video count
-      const gaps: IngredientGap[] = [];
-      for (const [ingredient, searchCount] of coOccurrences.entries()) {
-        if (searchCount < 2) continue; // Need minimum signal
-
-        // Count videos with base ingredients + this ingredient
-        const allIngredients = [...normalizedIngredients, ingredient];
-        const videoCount = await ctx.prisma.video.count({
-          where: {
-            AND: allIngredients.map(ing => ({
-              videoIngredients: {
-                some: { ingredient: { name: ing } },
-              },
-            })),
-          },
-        });
-
-        // Get demand signal if exists
-        const cacheKey = [...allIngredients].sort().join('|');
-        const demandSignal = await ctx.prisma.demandSignal.findUnique({
-          where: { ingredientKey: cacheKey },
-          select: { demandBand: true },
-        });
-
-        // Calculate base gap score
-        let gapScore = searchCount / Math.max(1, videoCount);
-
-        // Apply Google Trends boost multiplier
-        const trendsBoost = await getTrendsBoost(ctx.prisma, [ingredient]);
-        let trendsInsight: string | null = null;
-        let trendsGrowth: number | null = null;
-        let isBreakout = false;
-
-        if (trendsBoost) {
-          trendsGrowth = trendsBoost.weekOverWeekGrowth;
-          isBreakout = trendsBoost.isBreakout;
-
-          // Breakout = double opportunity
-          if (trendsBoost.isBreakout) {
-            gapScore *= 2.0;
-            trendsInsight = '🚀 BREAKOUT - Immediate opportunity window';
-          }
-          // Strong growth = 50% boost
-          else if (trendsBoost.weekOverWeekGrowth > 30) {
-            gapScore *= 1.5;
-            trendsInsight = `📈 Trending up ${Math.round(trendsBoost.weekOverWeekGrowth)}% this week`;
-          }
-          // Moderate growth = 25% boost
-          else if (trendsBoost.weekOverWeekGrowth > 10) {
-            gapScore *= 1.25;
-            trendsInsight = `↗️ Growing interest (+${Math.round(trendsBoost.weekOverWeekGrowth)}%)`;
-          }
-          // Declining = reduce priority
-          else if (trendsBoost.weekOverWeekGrowth < -20) {
-            gapScore *= 0.75;
-            trendsInsight = `↘️ Declining interest (${Math.round(trendsBoost.weekOverWeekGrowth)}%)`;
-          }
-        }
-
-        gaps.push({
-          ingredient,
-          searchCount,
-          videoCount,
-          gapScore,
-          demandBand: demandSignal?.demandBand || null,
-          trendsInsight,
-          trendsGrowth,
-          isBreakout,
-        });
-      }
-
-      // Sort by gap score (highest opportunity first)
-      gaps.sort((a, b) => b.gapScore - a.gapScore);
-
-      return {
-        baseIngredients: normalizedIngredients,
-        gaps: gaps.slice(0, 10),
-        totalSearches: relatedSearches.length,
-        source: 'search_patterns' as const,
-      };
+      return findGapsFromRecipeAnalysis(ctx, normalizedIngredients);
     }),
 });
 
 /**
- * Fallback: Find gaps from video co-occurrence data
- * Used when search history is insufficient
+ * Find content gaps by analyzing successful recipe videos.
+ *
+ * This approach:
+ * 1. Finds high-performing videos (by views) containing the base ingredients
+ * 2. Extracts co-occurring ingredients from those videos
+ * 3. Weights by video performance (views) - popular recipes = proven pairings
+ * 4. Identifies gaps where pairing is common but dedicated content is rare
  */
-async function findGapsFromVideoData(
+async function findGapsFromRecipeAnalysis(
   ctx: Context,
   baseIngredients: string[]
 ): Promise<{
   baseIngredients: string[];
   gaps: IngredientGap[];
-  totalSearches: number;
-  source: 'video_analysis';
+  totalVideos: number;
+  source: 'recipe_analysis';
 }> {
-  // Find videos that contain ALL base ingredients
-  const videosWithBase = await ctx.prisma.video.findMany({
+  // For single ingredient, require exact match
+  // For multiple ingredients, require at least 2 or 50% (whichever is higher)
+  const minMatch = baseIngredients.length === 1
+    ? 1
+    : Math.max(2, Math.ceil(baseIngredients.length * 0.5));
+
+  // Find high-performing videos containing the base ingredients
+  // Order by views to prioritize successful recipes
+  const candidateVideos = await ctx.prisma.video.findMany({
     where: {
-      AND: baseIngredients.map(ing => ({
-        videoIngredients: {
-          some: { ingredient: { name: ing } },
+      views: { gte: 1000 }, // Only consider videos with meaningful traction
+      videoIngredients: {
+        some: {
+          ingredient: {
+            name: { in: baseIngredients },
+          },
+          confidence: { gte: 0.6 }, // Higher confidence threshold
         },
-      })),
+      },
     },
     include: {
       videoIngredients: {
+        where: { confidence: { gte: 0.6 } },
         include: { ingredient: true },
       },
     },
-    take: 100,
+    take: 100, // Top 100 by views
     orderBy: { views: 'desc' },
   });
 
-  if (videosWithBase.length === 0) {
+  // Filter to videos that match enough base ingredients
+  const relevantVideos = candidateVideos.filter(video => {
+    const videoIngNames = new Set(video.videoIngredients.map(vi => vi.ingredient.name));
+    const matchCount = baseIngredients.filter(ing => videoIngNames.has(ing)).length;
+    return matchCount >= minMatch;
+  });
+
+  if (relevantVideos.length === 0) {
     return {
       baseIngredients,
       gaps: [],
-      totalSearches: 0,
-      source: 'video_analysis',
+      totalVideos: 0,
+      source: 'recipe_analysis',
     };
   }
 
-  // Count co-occurring ingredients weighted by video views
-  const coOccurrences = new Map<string, { count: number; totalViews: number }>();
-  for (const video of videosWithBase) {
-    const views = video.views || 1;
+  // MINIMUM SAMPLE SIZE: Need at least 5 videos to provide meaningful gap suggestions
+  // With fewer videos, co-occurrence data is statistically meaningless
+  if (relevantVideos.length < 5) {
+    return {
+      baseIngredients,
+      gaps: [],
+      totalVideos: relevantVideos.length,
+      source: 'recipe_analysis',
+    };
+  }
+
+  // Analyze co-occurring ingredients weighted by video performance
+  // Higher views = more proven pairing
+  const coOccurrences = new Map<string, {
+    weightedScore: number; // Sum of log(views) for videos containing this ingredient
+    rawCount: number; // Number of videos
+    avgViews: number; // Average views of videos with this pairing
+    totalViews: number;
+  }>();
+
+  for (const video of relevantVideos) {
+    const views = video.views || 1000;
+    const viewWeight = Math.log10(views); // Logarithmic to prevent outlier domination
+
     for (const vi of video.videoIngredients) {
       const ingName = vi.ingredient.name;
-      if (!baseIngredients.includes(ingName)) {
-        const existing = coOccurrences.get(ingName) || { count: 0, totalViews: 0 };
-        coOccurrences.set(ingName, {
-          count: existing.count + 1,
-          totalViews: existing.totalViews + views,
-        });
-      }
+      // Skip base ingredients
+      if (baseIngredients.includes(ingName)) continue;
+
+      const existing = coOccurrences.get(ingName) || {
+        weightedScore: 0,
+        rawCount: 0,
+        avgViews: 0,
+        totalViews: 0,
+      };
+
+      coOccurrences.set(ingName, {
+        weightedScore: existing.weightedScore + viewWeight,
+        rawCount: existing.rawCount + 1,
+        totalViews: existing.totalViews + views,
+        avgViews: 0, // Calculated below
+      });
     }
   }
 
-  // Find ingredients that appear in HIGH-performing videos but are RARE overall
+  // Calculate average views and filter
+  for (const [ing, data] of coOccurrences.entries()) {
+    data.avgViews = data.totalViews / data.rawCount;
+    coOccurrences.set(ing, data);
+  }
+
+  // Filter: require ingredient to appear in at least 15% of relevant videos
+  // or at least 3 videos (whichever is lower for small samples)
+  const minOccurrences = Math.min(3, Math.ceil(relevantVideos.length * 0.15));
+
   const gaps: IngredientGap[] = [];
+
   for (const [ingredient, data] of coOccurrences.entries()) {
-    if (data.count < 2) continue;
+    if (data.rawCount < minOccurrences) continue;
 
-    const avgViews = data.totalViews / data.count;
-
-    // Count total videos with this ingredient in database
-    const totalVideoCount = await ctx.prisma.video.count({
+    // Count videos that have BOTH base ingredients AND this ingredient
+    // This tells us how much content exists for this specific combination
+    const combinedVideoCount = await ctx.prisma.video.count({
       where: {
-        videoIngredients: {
-          some: { ingredient: { name: ingredient } },
-        },
+        AND: [
+          ...baseIngredients.map(ing => ({
+            videoIngredients: {
+              some: {
+                ingredient: { name: ing },
+                confidence: { gte: 0.5 },
+              },
+            },
+          })),
+          {
+            videoIngredients: {
+              some: {
+                ingredient: { name: ingredient },
+                confidence: { gte: 0.5 },
+              },
+            },
+          },
+        ],
       },
     });
 
-    // Gap score: high avg views + low overall video count = opportunity
-    // Normalize: avgViews/100000 gives rough scale, divided by video count
-    let gapScore = (avgViews / 100000) / Math.max(1, totalVideoCount / 10);
+    // Gap Score:
+    // - High co-occurrence score (proven pairing) = good
+    // - Low combined video count (content gap) = opportunity
+    // - Formula: (pairing strength) / (content saturation + 1)
+    const pairingStrength = data.weightedScore * (data.rawCount / relevantVideos.length);
+    let gapScore = pairingStrength / (combinedVideoCount + 1);
 
-    // Apply Google Trends boost multiplier
+    // Boost for very high average views (indicates the pairing is successful)
+    if (data.avgViews > 100000) {
+      gapScore *= 1.5;
+    } else if (data.avgViews > 50000) {
+      gapScore *= 1.25;
+    }
+
+    // Apply Google Trends boost
     const trendsBoost = await getTrendsBoost(ctx.prisma, [ingredient]);
     let trendsInsight: string | null = null;
     let trendsGrowth: number | null = null;
@@ -238,24 +232,33 @@ async function findGapsFromVideoData(
       }
     }
 
+    // Get demand band if we have cached data
+    const allIngredients = [...baseIngredients, ingredient];
+    const cacheKey = [...allIngredients].sort().join('|');
+    const demandSignal = await ctx.prisma.demandSignal.findUnique({
+      where: { ingredientKey: cacheKey },
+      select: { demandBand: true },
+    });
+
     gaps.push({
       ingredient,
-      searchCount: data.count, // Actually video co-occurrence count
-      videoCount: totalVideoCount,
+      coOccurrenceCount: data.rawCount,
+      videoCount: combinedVideoCount,
       gapScore,
-      demandBand: null,
+      demandBand: demandSignal?.demandBand || null,
       trendsInsight,
       trendsGrowth,
       isBreakout,
     });
   }
 
+  // Sort by gap score (best opportunities first)
   gaps.sort((a, b) => b.gapScore - a.gapScore);
 
   return {
     baseIngredients,
     gaps: gaps.slice(0, 10),
-    totalSearches: videosWithBase.length,
-    source: 'video_analysis',
+    totalVideos: relevantVideos.length,
+    source: 'recipe_analysis',
   };
 }

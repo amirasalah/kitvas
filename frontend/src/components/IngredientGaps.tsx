@@ -49,9 +49,7 @@ export function IngredientGaps({ ingredients, onAddIngredient, showContent = fal
   // The parent component handles the blurred preview
   if (!showContent) return null;
 
-  const sourceLabel = data.source === 'search_patterns'
-    ? `Based on ${data.totalSearches} related searches`
-    : `Based on ${data.totalSearches} similar videos`;
+  const sourceLabel = `Based on ${data.totalVideos} high-performing recipes`;
 
   return (
     <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 rounded-2xl border border-purple-100 p-5">
@@ -127,7 +125,7 @@ export function IngredientGaps({ ingredients, onAddIngredient, showContent = fal
               </div>
             )}
             <div className="text-xs text-gray-500 mt-1">
-              {gap.searchCount} {data.source === 'search_patterns' ? 'searches' : 'videos'} &middot; {gap.videoCount} total
+              {gap.coOccurrenceCount} pairings &middot; {gap.videoCount} videos
             </div>
           </button>
         ))}

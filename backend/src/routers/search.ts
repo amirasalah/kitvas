@@ -171,6 +171,7 @@ export const searchRouter = t.router({
           where: videoWhere,
           include: {
             videoIngredients: {
+              where: { confidence: { gte: 0.5 } }, // Only include high-confidence ingredients
               include: {
                 ingredient: true,
               },
@@ -184,11 +185,18 @@ export const searchRouter = t.router({
         });
 
         // Calculate relevance scores for database results
+        // Uses ingredient match ratio + title-match bonus for better ranking
         const analyzedVideosUnfiltered = videos.map((video) => {
           const matchingIngredients = video.videoIngredients.filter((vi) =>
             normalizedIngredients.includes(vi.ingredient.name)
           );
           const relevanceScore = matchingIngredients.length / normalizedIngredients.length;
+
+          // Title match bonus: videos with searched ingredients in the title
+          // are more likely to be about those ingredients (not incidental matches)
+          const titleLower = video.title.toLowerCase();
+          const titleMatches = normalizedIngredients.filter(ing => titleLower.includes(ing)).length;
+          const titleBonus = titleMatches / normalizedIngredients.length * 0.1; // up to 0.1 boost
 
           return {
             id: video.id,
@@ -199,6 +207,7 @@ export const searchRouter = t.router({
             publishedAt: video.publishedAt,
             views: video.views,
             relevanceScore,
+            sortScore: relevanceScore + titleBonus, // used for ordering only
             matchingCount: matchingIngredients.length,
             ingredients: video.videoIngredients.map((vi) => ({
               id: vi.ingredient.id,
@@ -248,10 +257,10 @@ export const searchRouter = t.router({
           }
         }
 
-        // Remove internal matchingCount field and sort by relevance
+        // Remove matchingCount and sort by sortScore (relevance + title bonus)
         let analyzedVideos = filteredVideos
           .map(({ matchingCount, ...video }) => video)
-          .sort((a, b) => b.relevanceScore - a.relevanceScore);
+          .sort((a, b) => b.sortScore - a.sortScore);
 
         // 2. Check cache for YouTube results
         let youtubeVideos = getCachedSearch(normalizedIngredients);
@@ -352,6 +361,11 @@ export const searchRouter = t.router({
             });
 
             if (videoWithDetails) {
+              // Title match bonus for fresh videos (same logic as DB results)
+              const freshTitleLower = videoWithDetails.title.toLowerCase();
+              const freshTitleMatches = normalizedIngredients.filter(ing => freshTitleLower.includes(ing)).length;
+              const freshTitleBonus = freshTitleMatches / normalizedIngredients.length * 0.1;
+
               freshAnalyzedVideos.push({
                 id: videoWithDetails.id,
                 youtubeId: videoWithDetails.youtubeId,
@@ -361,6 +375,7 @@ export const searchRouter = t.router({
                 publishedAt: videoWithDetails.publishedAt,
                 views: videoWithDetails.views,
                 relevanceScore,
+                sortScore: relevanceScore + freshTitleBonus,
                 ingredients: videoWithDetails.videoIngredients.map(vi => ({
                   id: vi.ingredient.id,
                   name: vi.ingredient.name,
@@ -392,10 +407,10 @@ export const searchRouter = t.router({
         }
 
         // Merge fresh analyzed videos with existing analyzed videos
-        const allAnalyzedVideos = [...filteredFreshVideos, ...analyzedVideos];
-
-        // Sort all by relevance score
-        allAnalyzedVideos.sort((a, b) => b.relevanceScore - a.relevanceScore);
+        // Sort by sortScore (relevance + title bonus) then strip internal field
+        const mergedVideos = [...filteredFreshVideos, ...analyzedVideos];
+        mergedVideos.sort((a, b) => b.sortScore - a.sortScore);
+        const allAnalyzedVideos = mergedVideos.map(({ sortScore, ...video }) => video);
 
         // Process remaining fresh videos in background (fire-and-forget)
         const remainingVideos = freshYoutubeVideosRaw.slice(10);

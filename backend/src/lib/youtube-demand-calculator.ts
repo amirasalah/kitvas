@@ -773,7 +773,9 @@ function generateOpportunities(
   }
 
   // Google Trends breakout opportunity
-  if (trendsBoost?.isBreakout) {
+  // Only show if isBreakout AND the growth data supports it (>10% minimum)
+  // This prevents misleading "+0% week-over-week" breakout messages
+  if (trendsBoost?.isBreakout && trendsBoost.weekOverWeekGrowth > 10) {
     opportunities.push({
       type: 'google_breakout',
       title: 'Google Trends Breakout',

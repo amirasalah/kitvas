@@ -90,6 +90,9 @@ const STATIC_BLOCKLIST = new Set([
 
   // Common false positives from real data
   'no', 'preservatives', 'housewife', 'cooks', 'shorts', 'subscribe',
+
+  // Verbs commonly confused with ingredients
+  'sprinkle', 'sprinkles', 'drizzle', 'drizzles', 'garnish', 'garnishes',
 ]);
 
 // ============================================================================
@@ -218,7 +221,7 @@ const INGREDIENT_KEYWORDS = [
   'hazelnuts', 'pecans', 'pistachios', 'chia seeds', 'flax seeds',
   // Sweets & Baking
   'chocolate', 'cocoa', 'sugar', 'brown sugar', 'powdered sugar',
-  'caramel', 'marshmallow', 'whipped cream', 'sprinkles',
+  'caramel', 'marshmallow', 'whipped cream',
   // Other
   'kimchi', 'sauerkraut', 'pickles', 'capers', 'olives', 'sun-dried tomatoes',
   'nutritional yeast', 'coconut milk', 'cashew cream', 'tofu', 'seitan',
@@ -354,16 +357,21 @@ function extractIngredientsFromText(
       
       // Calculate confidence based on:
       // - Source (title = higher confidence)
-      // - Exact match vs partial match
       // - Word boundaries (exact word = higher confidence)
       let confidence = source === 'title' ? 0.8 : 0.5;
-      
+
       // Check for exact word match (higher confidence)
-      const wordBoundaryRegex = new RegExp(`\\b${keywordLower}\\b`, 'i');
+      const escapedKeyword = keywordLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const wordBoundaryRegex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
       if (wordBoundaryRegex.test(text)) {
         confidence += 0.1;
       } else {
-        // Partial match (lower confidence)
+        // For descriptions, require word boundary match to avoid false positives
+        // from "other recipe" links, sponsors, etc.
+        if (source === 'description') {
+          continue; // Skip this keyword entirely
+        }
+        // Title substring match gets reduced confidence
         confidence -= 0.2;
       }
       
@@ -408,8 +416,14 @@ export function extractIngredientsWithKeywords(
   }
 
   // Extract from description (lower priority, but can add new ingredients)
+  // Truncate to first 600 chars: recipe-relevant info is at the top,
+  // below that is usually links to other videos, sponsors, playlists
+  // which cause false positives (e.g., "Check out my Raspberry Cheesecake!")
   if (description) {
-    const descIngredients = extractIngredientsFromText(description, 'description', 0.3);
+    const truncatedDesc = description.length > 600
+      ? description.substring(0, 600)
+      : description;
+    const descIngredients = extractIngredientsFromText(truncatedDesc, 'description', 0.3);
     for (const ing of descIngredients) {
       // Only add if not already found in title, or if description has higher confidence
       const existing = ingredients.get(ing.name);
