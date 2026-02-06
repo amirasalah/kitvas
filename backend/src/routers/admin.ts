@@ -12,17 +12,15 @@
  */
 
 import { z } from 'zod';
-import { TRPCError, initTRPC } from '@trpc/server';
-import type { Context } from '../context.js';
-
-const t = initTRPC.context<Context>().create();
+import { TRPCError } from '@trpc/server';
+import { t, adminProcedure } from '../trpc.js';
 
 export const adminRouter = t.router({
   /**
    * Get paginated videos for labeling
    * Supports filtering by labeled/unlabeled status
    */
-  getVideos: t.procedure
+  getVideos: adminProcedure
     .input(
       z.object({
         cursor: z.string().optional(), // for pagination
@@ -101,7 +99,7 @@ export const adminRouter = t.router({
   /**
    * Get a single video with full details for labeling
    */
-  getVideo: t.procedure
+  getVideo: adminProcedure
     .input(z.object({ videoId: z.string() }))
     .query(async ({ input, ctx }) => {
       const video = await ctx.prisma.video.findUnique({
@@ -158,7 +156,7 @@ export const adminRouter = t.router({
   /**
    * Mark a video as labeled (verified by admin)
    */
-  markLabeled: t.procedure
+  markLabeled: adminProcedure
     .input(
       z.object({
         videoId: z.string(),
@@ -188,7 +186,7 @@ export const adminRouter = t.router({
   /**
    * Unmark a video (revert labeling)
    */
-  unmarkLabeled: t.procedure
+  unmarkLabeled: adminProcedure
     .input(z.object({ videoId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       await ctx.prisma.video.update({
@@ -205,7 +203,7 @@ export const adminRouter = t.router({
   /**
    * Add an ingredient to a video (admin labeling)
    */
-  addIngredient: t.procedure
+  addIngredient: adminProcedure
     .input(
       z.object({
         videoId: z.string(),
@@ -265,7 +263,7 @@ export const adminRouter = t.router({
   /**
    * Remove an ingredient from a video (admin labeling)
    */
-  removeIngredient: t.procedure
+  removeIngredient: adminProcedure
     .input(
       z.object({
         videoId: z.string(),
@@ -286,7 +284,7 @@ export const adminRouter = t.router({
   /**
    * Rename an ingredient on a video
    */
-  renameIngredient: t.procedure
+  renameIngredient: adminProcedure
     .input(
       z.object({
         videoId: z.string(),
@@ -347,7 +345,7 @@ export const adminRouter = t.router({
   /**
    * Set confidence for a specific ingredient on a video
    */
-  setConfidence: t.procedure
+  setConfidence: adminProcedure
     .input(
       z.object({
         videoId: z.string(),
@@ -372,7 +370,7 @@ export const adminRouter = t.router({
   /**
    * Get labeling progress stats
    */
-  getStats: t.procedure.query(async ({ ctx }) => {
+  getStats: adminProcedure.query(async ({ ctx }) => {
     const [totalVideos, labeledVideos, totalIngredients, totalCorrections] =
       await Promise.all([
         ctx.prisma.video.count({ where: { extractedAt: { not: null } } }),
@@ -413,7 +411,7 @@ export const adminRouter = t.router({
   /**
    * Export labeled dataset as JSON
    */
-  exportJSON: t.procedure
+  exportJSON: adminProcedure
     .input(
       z.object({
         filter: z.enum(['labeled', 'all']).default('labeled'),
@@ -457,7 +455,7 @@ export const adminRouter = t.router({
   /**
    * Export labeled dataset as CSV (returns CSV string)
    */
-  exportCSV: t.procedure
+  exportCSV: adminProcedure
     .input(
       z.object({
         filter: z.enum(['labeled', 'all']).default('labeled'),
@@ -505,7 +503,7 @@ export const adminRouter = t.router({
   /**
    * Export dataset with train/validation/test splits
    */
-  exportSplit: t.procedure
+  exportSplit: adminProcedure
     .input(
       z.object({
         trainRatio: z.number().min(0.1).max(0.9).default(0.7),

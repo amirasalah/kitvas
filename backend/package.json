@@ -13,6 +13,7 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "ingest:videos": "tsx src/scripts/ingest-videos.ts",
+    "import:recipes": "tsx src/scripts/import-public-recipes.ts",
     "batch:daily": "tsx src/scripts/daily-batch-job.ts",
     "accuracy": "tsx src/scripts/measure-accuracy.ts",
     "trends:daily": "tsx src/scripts/fetch-google-trends.ts",
@@ -40,6 +41,7 @@
     "google-trends-api": "^4.9.2",
     "groq-sdk": "^0.37.0",
     "hono": "^4.3.0",
+    "jose": "^6.1.3",
     "node-cron": "^4.2.1",
     "youtube-transcript": "^1.2.1",
     "zod": "^3.22.4"

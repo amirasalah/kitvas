@@ -75,7 +75,7 @@ async function runTrendsFetch(): Promise<void> {
   console.log(`Started at: ${stats.startTime.toISOString()}\n`);
 
   const jobId = await logJobStart();
-  const fetcher = new GoogleTrendsFetcher(prisma);
+  const fetcher = new GoogleTrendsFetcher(prisma, { cacheTtlHours: 1 });
 
   try {
     // Step 1: Identify keywords to track

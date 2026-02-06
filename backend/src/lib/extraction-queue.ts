@@ -8,6 +8,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { YouTubeVideo } from './youtube.js';
 import { processVideoIngredients } from './ingredient-extractor.js';
 import { getVideoDetails } from './youtube.js';
+import { fetchTranscript } from './transcript-fetcher.js';
 
 interface QueuedVideo {
   youtubeId: string;
@@ -104,12 +105,19 @@ async function processNextVideo(prisma: PrismaClient): Promise<boolean> {
       },
     });
 
-    // Extract and store ingredients
+    // Fetch transcript for better ingredient extraction
+    let transcript: string | null = null;
+    try {
+      transcript = await fetchTranscript(video.youtubeId);
+    } catch { /* continue without transcript */ }
+
+    // Extract and store ingredients (transcript-first when available)
     const ingredientCount = await processVideoIngredients(
       prisma,
       dbVideo.id,
       video.title,
-      video.description
+      video.description,
+      transcript
     );
 
     console.log(`[Queue] Processed ${video.youtubeId}: "${video.title.slice(0, 50)}..." - ${ingredientCount} ingredients`);

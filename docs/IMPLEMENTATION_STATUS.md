@@ -14,7 +14,7 @@
 | Week 7+ | ML Training & Analytics | ✅ Complete |
 | Week 7++ | Google Trends Integration | ✅ Complete |
 | Week 7++ | Automated Cron Scheduling | ✅ Complete |
-| Week 8 | Auth + Payments | ⏳ Pending |
+| Week 8 | Auth (Partial) | ✅ Auth Complete, Payments Pending |
 | Week 9 | Trends + Polish + Launch | ⏳ Pending |
 
 ---
@@ -633,11 +633,12 @@ All batch jobs and maintenance scripts now run automatically via a centralized c
 | Job | Schedule (UTC) | Description |
 |-----|----------------|-------------|
 | `aggregate-trends` | Daily 12:10 AM | Aggregate search trends |
-| `trends-daily` | Daily 1:00 AM | Fetch Google Trends data |
+| `trends-hourly` | Hourly at :00 | Fetch Google Trends data (worldwide region, 1h cache) |
 | `batch-daily` | Daily 2:00 AM | Video processing & demand calculation |
 | `refresh-views` | Sunday 3:00 AM | Refresh YouTube view counts |
 | `aggregate-corrections` | Monday 4:00 AM | Aggregate ML corrections |
 | `calibrate-opportunities` | Tuesday 5:00 AM | Calibrate opportunity scoring |
+| `fetch-ingredients` | Wednesday 6:00 AM | Fetch ingredients from Wikidata |
 
 ### NPM Scripts Added
 
@@ -649,6 +650,7 @@ npm run scheduler:once   # Run all jobs once (testing)
 npm run scheduler:run <job>  # Run a specific job
 
 # Individual job scripts
+npm run trends:hourly             # Fetch Google Trends (worldwide, hourly)
 npm run aggregate:trends
 npm run refresh:views
 npm run aggregate:corrections
@@ -679,30 +681,83 @@ All job executions are logged to `GoogleTrendsJobLog` table:
 
 ---
 
-## 🔜 Next: Week 8 (Auth + Payments)
+## ✅ Completed: Week 8 (Authentication)
 
-### Day 1-3: Authentication
-- [ ] Set up Supabase Auth
-- [ ] Add email/password auth
-- [ ] Add Google OAuth
-- [ ] Build login/signup pages
-- [ ] Add protected routes
+### Authentication Implementation ✅
 
-### Day 4-6: Subscription System
+**NextAuth v5 + Google OAuth** — Full authentication bridge between frontend and backend.
+
+#### What's Implemented
+
+1. **Frontend Auth (NextAuth v5)**
+   - Google OAuth sign-in via NextAuth v5 (beta.30)
+   - Session management with encrypted JWT (JWE) cookies
+   - Cookie name: `authjs.session-token` (dev) / `__Secure-authjs.session-token` (prod)
+   - Token passed to backend via `Authorization: Bearer <token>` in tRPC headers
+
+2. **Backend JWT Verification**
+   - `jose` library decrypts NextAuth JWE tokens (NOT signed JWT — uses `jwtDecrypt`, not `jwtVerify`)
+   - Key derivation: `hkdf('sha256', AUTH_SECRET, '', 'Auth.js Generated Encryption Key', 64)`
+   - User upsert on first authenticated request
+   - `ctx.userId` and `ctx.userEmail` populated for all authenticated requests
+
+3. **Shared tRPC Procedures** (`backend/src/trpc.ts`)
+   - `t.procedure` (public) — no auth required
+   - `protectedProcedure` — requires authenticated user (`ctx.userId` must be set)
+   - `adminProcedure` — requires admin email allowlist
+
+4. **Router Auth Assignments**
+
+   | Router | Procedure | Endpoints |
+   |--------|-----------|-----------|
+   | search | public | search, autocomplete |
+   | analytics | public | all analytics endpoints |
+   | gaps | public | content gaps |
+   | corrections | public | submit, addIngredient |
+   | corrections | protected | getStats |
+   | opportunities | protected | track, list, updateStatus, delete, getPendingOutcomes |
+   | outcomes | protected | submit, getStats |
+   | outcomes | public | getCommunityStats |
+   | admin | admin | all 12 admin endpoints |
+
+5. **Architecture**
+   - All routers import from shared `backend/src/trpc.ts` (avoids circular dependencies)
+   - `backend/src/router.ts` only imports `t` and composes the app router
+   - Admin email hardcoded in `trpc.ts` (planned migration to DB-driven roles)
+
+#### Files Created/Modified
+- `backend/src/trpc.ts` — Shared tRPC instance with procedure definitions
+- `backend/src/context.ts` — JWT verification, user upsert, ctx population
+- `backend/src/router.ts` — Simplified to import `t` from trpc.ts
+- `backend/src/routers/*.ts` — All 7 routers updated to import from trpc.ts
+- `frontend/src/app/providers.tsx` — Auth cookie reading and Bearer token injection
+- `backend/.env` — Added `AUTH_SECRET`
+- `frontend/.env` — Added `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_URL`
+
+### Payments (Pending)
 - [ ] Integrate Stripe
 - [ ] Build subscription plans (Free/Pro)
 - [ ] Create checkout flow
 - [ ] Enforce feature limits
 
-### Day 7: Usage Tracking
-- [ ] Track search usage per user
-- [ ] Display usage limits
-- [ ] Build upgrade prompts
+---
+
+## 🔜 Next: Week 9 (Polish + Launch)
+
+### Remaining Work
+- [ ] Stripe integration for subscriptions
+- [ ] Analytics dashboard frontend page
+- [ ] User profile/stats page
+- [ ] Community accuracy display on opportunities page
+- [ ] Search rate limiting enforcement
+- [ ] Polish and bug fixes
+- [ ] Production deployment
 
 ---
 
 ## Current Limitations
-- **No authentication**: User tracking via temporary IDs (Week 8)
+- **No payments**: Stripe integration pending (free tier limits enforced via code but no upgrade path)
+- **No analytics page**: Backend API complete, frontend page not yet built
 - **No channel benchmarking**: Requires YouTube OAuth (V1.1)
 
 ### Files Created

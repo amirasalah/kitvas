@@ -35,9 +35,9 @@ export const scheduledJobs: ScheduledJob[] = [
   },
 
   {
-    name: 'trends-daily',
+    name: 'trends-hourly',
     description: 'Fetch Google Trends data for top ingredients',
-    schedule: '0 1 * * *', // Daily at 1:00 AM UTC
+    schedule: '0 * * * *', // Every hour at :00
     script: 'src/scripts/fetch-google-trends.ts',
     enabled: true,
     timeout: 30 * 60 * 1000, // 30 minutes (rate-limited)
@@ -113,6 +113,11 @@ export function getEnabledJobs(): ScheduledJob[] {
 export function describeSchedule(schedule: string): string {
   const parts = schedule.split(' ');
   const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+
+  // Hourly jobs
+  if (hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    return `Hourly at :${minute.padStart(2, '0')} UTC`;
+  }
 
   // Daily jobs
   if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {

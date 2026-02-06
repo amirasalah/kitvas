@@ -225,6 +225,12 @@ const INGREDIENT_KEYWORDS = [
   // Other
   'kimchi', 'sauerkraut', 'pickles', 'capers', 'olives', 'sun-dried tomatoes',
   'nutritional yeast', 'coconut milk', 'cashew cream', 'tofu', 'seitan',
+  // Dish names (searchable via SYNONYM_MAP, needed for keyword fallback extraction)
+  'kofte', 'hummus', 'falafel', 'shawarma', 'labneh', 'kibbeh', 'tzatziki',
+  'biryani', 'tikka', 'masala', 'korma', 'samosa', 'tandoori', 'dal', 'paneer',
+  'bulgogi', 'bibimbap', 'teriyaki', 'gyoza', 'tempura',
+  'shakshuka', 'tagine', 'quesadilla', 'guacamole', 'burrito', 'taco', 'ceviche',
+  'risotto', 'gnocchi', 'bruschetta', 'pho', 'satay', 'laksa', 'rendang',
 ];
 
 /**
@@ -448,11 +454,11 @@ async function extractFromTranscript(
 
   const llmResult = await extractWithLLM('Video transcript', truncated);
   if (llmResult && llmResult.length > 0) {
-    // Mark source as 'transcript' with slightly lower confidence
+    // Mark source as 'transcript' — highest confidence since transcripts contain the actual recipe
     return llmResult.map(ing => ({
       ...ing,
       source: 'transcript' as const,
-      confidence: Math.min(ing.confidence, 0.80), // Cap at 0.80 for transcript
+      confidence: 0.95,
     }));
   }
   return [];
@@ -494,32 +500,48 @@ export async function extractIngredientsFromVideo(
   // Collect all ingredients in a map (keyed by name for deduplication)
   const ingredients = new Map<string, ExtractedIngredient>();
 
-  // 1. Try LLM extraction from title/description first (Groq with Llama 3.3)
-  const llmResult = await extractWithLLM(title, description);
-  if (llmResult && llmResult.length > 0) {
-    console.log(`  [Groq] Extracted ${llmResult.length} ingredients from metadata`);
-    for (const ing of llmResult) {
-      ingredients.set(ing.name, ing);
-    }
-  } else {
-    // Fall back to keyword matching for title/description
-    const keywordResult = extractIngredientsWithKeywords(title, description);
-    console.log(`  [Keywords] Extracted ${keywordResult.length} ingredients from metadata`);
-    for (const ing of keywordResult) {
-      ingredients.set(ing.name, ing);
-    }
-  }
-
-  // 2. Extract from transcript if available (adds ingredients not found in metadata)
+  // Priority: transcript first (actual recipe), then title/description (supplementary)
   if (transcript && transcript.length > 50) {
+    // 1a. Transcript available — extract from it first (highest confidence)
     const transcriptIngredients = await extractFromTranscript(transcript);
     if (transcriptIngredients.length > 0) {
-      console.log(`  [Transcript] Extracted ${transcriptIngredients.length} ingredients`);
+      console.log(`  [Transcript] Extracted ${transcriptIngredients.length} ingredients (primary)`);
       for (const ing of transcriptIngredients) {
-        // Only add if not already found (title/description have priority)
-        if (!ingredients.has(ing.name)) {
-          ingredients.set(ing.name, ing);
-        }
+        ingredients.set(ing.name, ing);
+      }
+    }
+
+    // 1b. Supplement with title/description for anything transcript missed
+    const llmResult = await extractWithLLM(title, description);
+    const metadataIngredients = llmResult && llmResult.length > 0
+      ? llmResult
+      : extractIngredientsWithKeywords(title, description);
+
+    let supplemented = 0;
+    for (const ing of metadataIngredients) {
+      if (!ingredients.has(ing.name)) {
+        // Lower confidence for metadata when transcript is available
+        ingredients.set(ing.name, { ...ing, confidence: Math.min(ing.confidence, 0.75) });
+        supplemented++;
+      }
+    }
+    if (supplemented > 0) {
+      console.log(`  [Metadata] Added ${supplemented} supplementary ingredients from title/description`);
+    }
+  } else {
+    // 2. No transcript — fall back to title/description extraction
+    const llmResult = await extractWithLLM(title, description);
+    if (llmResult && llmResult.length > 0) {
+      console.log(`  [Groq] Extracted ${llmResult.length} ingredients from metadata`);
+      for (const ing of llmResult) {
+        // Slightly lower confidence without transcript confirmation
+        ingredients.set(ing.name, { ...ing, confidence: Math.min(ing.confidence, 0.85) });
+      }
+    } else {
+      const keywordResult = extractIngredientsWithKeywords(title, description);
+      console.log(`  [Keywords] Extracted ${keywordResult.length} ingredients from metadata`);
+      for (const ing of keywordResult) {
+        ingredients.set(ing.name, ing);
       }
     }
   }
@@ -585,11 +607,12 @@ export async function processVideoIngredients(
   prisma: PrismaClient,
   videoId: string,
   title: string,
-  description: string | null
+  description: string | null,
+  transcript?: string | null
 ): Promise<number> {
   try {
-    // Extract ingredients (uses Claude API with keyword fallback)
-    const extracted = await extractIngredientsFromVideo(title, description);
+    // Extract ingredients (transcript-first when available, then title/description)
+    const extracted = await extractIngredientsFromVideo(title, description, transcript);
 
     if (extracted.length === 0) {
       return 0;

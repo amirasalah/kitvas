@@ -7,11 +7,9 @@
  */
 
 import { z } from 'zod';
-import { TRPCError, initTRPC } from '@trpc/server';
-import type { Context } from '../context.js';
+import { TRPCError } from '@trpc/server';
+import { t, protectedProcedure } from '../trpc.js';
 import { getStableAnonymousId } from '../lib/anonymous-user.js';
-
-const t = initTRPC.context<Context>().create();
 
 const SubmitCorrectionSchema = z.object({
   videoId: z.string(),
@@ -305,16 +303,8 @@ export const correctionsRouter = t.router({
   /**
    * Get user's correction stats
    */
-  getStats: t.procedure.query(async ({ ctx }) => {
+  getStats: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.userId;
-
-    if (!userId) {
-      return {
-        totalCorrections: 0,
-        totalImpact: 0,
-        recentCorrections: [],
-      };
-    }
 
     try {
       const user = await ctx.prisma.user.findUnique({

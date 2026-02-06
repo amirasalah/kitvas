@@ -125,7 +125,7 @@ export class GoogleTrendsFetcher {
               keyword_date_region: {
                 keyword: keyword.toLowerCase(),
                 date: today,
-                region: 'US',
+                region: 'worldwide',
               },
             },
             update: {
@@ -138,7 +138,7 @@ export class GoogleTrendsFetcher {
               interestValue: latestPoint.value,
               isBreakout: trendsData.isBreakout,
               date: today,
-              region: 'US',
+              region: 'worldwide',
             },
           });
         }

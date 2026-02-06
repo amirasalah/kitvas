@@ -473,40 +473,41 @@ These features must be built early to start the flywheel:
 
 ---
 
-### Week 8: Auth + Payments
+### Week 8: Auth + Payments ✅ AUTH COMPLETE
 
 #### Objectives
-- Implement user authentication
-- Build subscription system
-- Enforce free/pro tiers
+- ~~Implement user authentication~~ ✅ Done
+- Build subscription system (pending)
+- Enforce free/pro tiers (pending)
 
 #### Tasks
 
-**Day 1-3: Authentication**
-- [ ] Set up Supabase Auth
-- [ ] Add email/password auth
-- [ ] Add Google OAuth
-- [ ] Build login/signup pages (frontend)
-- [ ] Add protected routes (Hono middleware)
-- [ ] Set up Resend for transactional emails (verification, password reset)
+**Day 1-3: Authentication** ✅
+- [x] Set up NextAuth v5 with Google OAuth (not Supabase Auth — simpler, direct integration)
+- [x] Backend JWT verification via jose library (decrypts JWE tokens)
+- [x] Shared tRPC procedures (public, protected, admin) in `backend/src/trpc.ts`
+- [x] Auth token bridging: frontend cookie → `Authorization: Bearer` header → backend context
+- [x] User upsert on first authenticated request
+- [x] All routers updated with appropriate auth procedures
+- [x] Admin endpoints restricted by email allowlist
 
-**Day 4-6: Subscription System**
+**Day 4-6: Subscription System** (Pending)
 - [ ] Integrate Stripe
 - [ ] Build subscription plans (Free/Pro)
 - [ ] Create checkout flow
 - [ ] Build subscription management page
 - [ ] Enforce feature limits (searches, tracking)
 
-**Day 7: Usage Tracking**
+**Day 7: Usage Tracking** (Pending)
 - [ ] Track search usage per user
 - [ ] Display usage limits (10/week for free)
 - [ ] Build upgrade prompts
 - [ ] Test subscription flow end-to-end
 
 #### Deliverables
-- [x] Users can sign up/login
-- [x] Subscriptions working
-- [x] Free/Pro tiers enforced
+- [x] Users can sign up/login (Google OAuth)
+- [ ] Subscriptions working
+- [ ] Free/Pro tiers enforced
 
 ---
 

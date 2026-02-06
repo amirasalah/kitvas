@@ -13,10 +13,7 @@
  */
 
 import { z } from 'zod';
-import { initTRPC } from '@trpc/server';
-import type { Context } from '../context.js';
-
-const t = initTRPC.context<Context>().create();
+import { t } from '../trpc.js';
 
 export const analyticsRouter = t.router({
   /**

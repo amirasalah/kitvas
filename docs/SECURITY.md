@@ -29,13 +29,51 @@
 - Updated from `14.0.4` to `14.2.10`
 - Fixed: Server-Side Request Forgery, Cache Poisoning, DoS in image optimization
 
+## Authentication Architecture
+
+### Overview
+
+Kitvas uses **NextAuth v5 (beta.30)** with Google OAuth for authentication. The frontend manages sessions via NextAuth, and the backend verifies tokens independently using the `jose` library.
+
+### Auth Flow
+
+```
+1. User clicks "Sign in with Google" → NextAuth handles OAuth
+2. NextAuth stores encrypted JWT (JWE) in `authjs.session-token` cookie
+3. Frontend reads cookie, sends as `Authorization: Bearer <token>` in tRPC headers
+4. Backend extracts token, decrypts JWE using AUTH_SECRET via jose
+5. Backend upserts user record and sets ctx.userId / ctx.userEmail
+```
+
+### Key Security Details
+
+- **Token format**: JWE (JSON Web Encryption), NOT signed JWT. Tokens are encrypted, not just signed.
+- **Key derivation**: `hkdf('sha256', AUTH_SECRET, '', 'Auth.js Generated Encryption Key', 64)` — derived from AUTH_SECRET using HKDF
+- **Decryption**: `jwtDecrypt` from jose library (NOT `jwtVerify`)
+- **Cookie names**: `authjs.session-token` (development), `__Secure-authjs.session-token` (production with HTTPS)
+- **AUTH_SECRET**: Must be identical in both `frontend/.env` and `backend/.env`
+
+### Procedure Authorization
+
+| Procedure Type | Access Level | Usage |
+|---------------|-------------|-------|
+| `t.procedure` (public) | Anyone | Search, autocomplete, analytics, gaps, community stats |
+| `protectedProcedure` | Authenticated users | Opportunities, outcomes, user correction stats |
+| `adminProcedure` | Admin email allowlist | All admin endpoints (labeling, export, stats) |
+
+### Admin Access
+
+Admin access is controlled by an email allowlist in `backend/src/trpc.ts`. Currently hardcoded — planned migration to database-driven roles in V1.1.
+
 ## Security Best Practices
 
 1. **Regular Updates**: Run `npm audit` regularly
 2. **Dependency Pinning**: Use exact versions for critical dependencies in production
 3. **Environment Variables**: Never commit secrets (use `.env` files)
 4. **API Keys**: Rotate keys periodically
-5. **Monitoring**: Set up Sentry for error tracking (Week 9)
+5. **AUTH_SECRET**: Must be kept secret — it can decrypt all session tokens
+6. **Google OAuth**: Ensure redirect URIs are restricted to your domains only
+7. **Monitoring**: Set up Sentry for error tracking (Week 9)
 
 ## Reporting Security Issues
 

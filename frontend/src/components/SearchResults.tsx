@@ -233,8 +233,10 @@ export function SearchResults({
             </section>
           )}
 
-          {/* Opportunities Section */}
-          {opportunities.length > 0 && (
+          {/* Opportunities Section — filter out contradictory breakouts with no actual growth */}
+          {opportunities.filter(opp =>
+            !(opp.type === 'google_breakout' && opp.description?.includes('+0%'))
+          ).length > 0 && (
             <section>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
@@ -248,9 +250,11 @@ export function SearchResults({
                 </div>
               </div>
               <div className="space-y-3">
-                {opportunities.map((opp, index) => (
-                  <OpportunityCard key={index} opportunity={opp} ingredients={ingredients} />
-                ))}
+                {opportunities
+                  .filter(opp => !(opp.type === 'google_breakout' && opp.description?.includes('+0%')))
+                  .map((opp, index) => (
+                    <OpportunityCard key={index} opportunity={opp} ingredients={ingredients} />
+                  ))}
               </div>
             </section>
           )}
@@ -281,29 +285,10 @@ export function SearchResults({
 
       {/* Analyzed Videos */}
       {analyzedVideos.length > 0 && (
-        <section>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-              <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Analyzed Videos</h2>
-              <p className="text-sm text-gray-500">With AI-detected ingredients</p>
-            </div>
-          </div>
-          {lowRelevanceFallback && (
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
-              <span className="font-medium">Note:</span> No exact matches found. Showing partially matching videos.
-            </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {analyzedVideos.map((video) => (
-              <VideoCard key={video.id} video={video} />
-            ))}
-          </div>
-        </section>
+        <AnalyzedVideosSection
+          videos={analyzedVideos}
+          lowRelevanceFallback={lowRelevanceFallback}
+        />
       )}
     </div>
   )
@@ -393,9 +378,9 @@ function DemandBadge({
         )}
       </div>
 
-      {/* Content Gap Analysis - Only shown when logged in */}
+      {/* Content Gap Analysis + Contextual Interpretation - Only shown when logged in */}
       {showDetails && demandSignal && demandSignal.contentGap && (
-        <div className="mt-4 pt-4 border-t border-gray-100">
+        <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
           <div className="flex items-start gap-2">
             <span className={`font-semibold ${
               demandSignal.contentGap.type === 'underserved' ? 'text-green-600' :
@@ -409,7 +394,19 @@ function DemandBadge({
                '○ Balanced competition'}
             </span>
           </div>
-          <p className="text-sm text-gray-500 mt-1">{demandSignal.contentGap.reasoning}</p>
+          <p className="text-sm text-gray-500">{demandSignal.contentGap.reasoning}</p>
+          {/* Contextual interpretation of raw numbers */}
+          {demandSignal.avgViews > 0 && (
+            <p className="text-xs text-gray-400">
+              {demandSignal.avgViews >= 1000000
+                ? 'Very competitive — top videos get millions of views, typically requires an established channel'
+                : demandSignal.avgViews >= 100000
+                ? 'Competitive niche — strong view counts, but room for quality content'
+                : demandSignal.avgViews >= 10000
+                ? 'Accessible niche — solid views achievable for growing channels'
+                : 'Small niche — lower view counts, but less competition'}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -647,6 +644,78 @@ function IngredientTag({
         </div>
       )}
     </div>
+  )
+}
+
+type SortOption = 'relevance' | 'views' | 'newest'
+
+function AnalyzedVideosSection({
+  videos,
+  lowRelevanceFallback,
+}: {
+  videos: VideoResult[]
+  lowRelevanceFallback?: boolean
+}) {
+  const [sortBy, setSortBy] = useState<SortOption>('relevance')
+
+  const sortedVideos = [...videos].sort((a, b) => {
+    if (sortBy === 'views') {
+      return (b.views ?? 0) - (a.views ?? 0)
+    }
+    if (sortBy === 'newest') {
+      return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+    }
+    // 'relevance' — keep original order (already sorted by backend)
+    return 0
+  })
+
+  const sortOptions: { value: SortOption; label: string }[] = [
+    { value: 'relevance', label: 'Relevance' },
+    { value: 'views', label: 'Most viewed' },
+    { value: 'newest', label: 'Newest' },
+  ]
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Analyzed Videos</h2>
+            <p className="text-sm text-gray-500">With AI-detected ingredients</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+          {sortOptions.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setSortBy(opt.value)}
+              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                sortBy === opt.value
+                  ? 'bg-white text-gray-900 shadow-sm font-medium'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {lowRelevanceFallback && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+          <span className="font-medium">Note:</span> No exact matches found. Showing partially matching videos.
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {sortedVideos.map((video) => (
+          <VideoCard key={video.id} video={video} />
+        ))}
+      </div>
+    </section>
   )
 }
 

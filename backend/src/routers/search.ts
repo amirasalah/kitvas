@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { TRPCError, initTRPC } from '@trpc/server';
-import type { Context } from '../context.js';
+import { TRPCError } from '@trpc/server';
+import { t } from '../trpc.js';
 import { getCachedSearch, setCachedSearch, getCacheKey } from '../lib/search-cache.js';
 import { checkRateLimit, incrementRateLimit, getRemainingSearches } from '../lib/rate-limiter.js';
 import { searchYouTubeVideos, getVideoDetails, type YouTubeVideo } from '../lib/youtube.js';
@@ -10,9 +10,7 @@ import { extractTagsFromVideo, storeExtractedTags } from '../lib/tag-extractor.j
 import { processBackgroundVideos } from '../lib/background-processor.js';
 import { fetchTranscript } from '../lib/transcript-fetcher.js';
 import { getTrendsBoost } from '../lib/google-trends/fetcher.js';
-import { normalizeIngredient, getSynonymMatches } from '../lib/ingredient-synonyms.js';
-
-const t = initTRPC.context<Context>().create();
+import { normalizeIngredient, getSynonymMatches, getSynonyms } from '../lib/ingredient-synonyms.js';
 
 const SearchInputSchema = z.object({
   ingredients: z.array(z.string()).min(1).max(10),
@@ -53,6 +51,24 @@ async function searchYouTubeLive(
     console.error('[Search] YouTube API error:', error);
     return [];
   }
+}
+
+/**
+ * Check if a video title contains a search ingredient or any of its synonyms.
+ * Supplements ingredient-based matching for dish names (kofte, falafel, etc.)
+ * that are searchable but not extracted as VideoIngredient records.
+ */
+function titleContainsIngredient(titleLower: string, normalizedIngredient: string): boolean {
+  if (titleLower.includes(normalizedIngredient)) {
+    return true;
+  }
+  const synonyms = getSynonyms(normalizedIngredient);
+  for (const syn of synonyms) {
+    if (titleLower.includes(syn.toLowerCase())) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export const searchRouter = t.router({
@@ -146,16 +162,37 @@ export const searchRouter = t.router({
         const normalizedTags = filterTags?.map((t) => t.toLowerCase().trim()) || [];
 
         // 1. Always search database (fast, has ingredient data)
+        // Build title search terms: each ingredient + its synonyms (for dish names not extracted as ingredients)
+        const titleSearchTerms: string[] = [];
+        for (const ing of normalizedIngredients) {
+          titleSearchTerms.push(ing);
+          for (const syn of getSynonyms(ing)) {
+            titleSearchTerms.push(syn.toLowerCase());
+          }
+        }
+
         const videoWhere: any = {
-          videoIngredients: {
-            some: {
-              ingredient: {
-                name: {
-                  in: normalizedIngredients,
+          OR: [
+            // Match by ingredient records (existing behavior)
+            {
+              videoIngredients: {
+                some: {
+                  ingredient: {
+                    name: {
+                      in: normalizedIngredients,
+                    },
+                  },
                 },
               },
             },
-          },
+            // Match by title text (catches dish names not extracted as ingredients)
+            ...titleSearchTerms.slice(0, 20).map(term => ({
+              title: {
+                contains: term,
+                mode: 'insensitive' as const,
+              },
+            })),
+          ],
         };
 
         // If tags are specified, filter by them
@@ -178,25 +215,52 @@ export const searchRouter = t.router({
             },
             videoTags: true,
           },
-          take: 50,
+          take: 200, // Fetch larger pool for better relevance filtering
           orderBy: {
-            publishedAt: 'desc',
+            views: 'desc', // Prioritize videos with view data over recency
           },
         });
 
         // Calculate relevance scores for database results
-        // Uses ingredient match ratio + title-match bonus for better ranking
+        // Binary match ratio for filtering/display + weighted score for ranking
         const analyzedVideosUnfiltered = videos.map((video) => {
+          const titleLower = video.title.toLowerCase();
+
+          // Count ingredient-based matches
           const matchingIngredients = video.videoIngredients.filter((vi) =>
             normalizedIngredients.includes(vi.ingredient.name)
           );
-          const relevanceScore = matchingIngredients.length / normalizedIngredients.length;
+          const ingredientMatchedNames = new Set(matchingIngredients.map(vi => vi.ingredient.name));
 
-          // Title match bonus: videos with searched ingredients in the title
-          // are more likely to be about those ingredients (not incidental matches)
-          const titleLower = video.title.toLowerCase();
-          const titleMatches = normalizedIngredients.filter(ing => titleLower.includes(ing)).length;
-          const titleBonus = titleMatches / normalizedIngredients.length * 0.1; // up to 0.1 boost
+          // Count title-based matches for unmatched search terms (catches dish names like kofte)
+          const titleMatchedNames: string[] = [];
+          for (const ing of normalizedIngredients) {
+            if (!ingredientMatchedNames.has(ing) && titleContainsIngredient(titleLower, ing)) {
+              titleMatchedNames.push(ing);
+            }
+          }
+
+          const totalMatchCount = matchingIngredients.length + titleMatchedNames.length;
+          // Binary match ratio (for filtering thresholds and "X% match" display)
+          const relevanceScore = totalMatchCount / normalizedIngredients.length;
+
+          // Weighted score for ranking (considers title presence + confidence)
+          let weightedScore = 0;
+          for (const ing of normalizedIngredients) {
+            const matchedVi = video.videoIngredients.find(vi => vi.ingredient.name === ing);
+            if (matchedVi) {
+              if (titleLower.includes(ing)) {
+                weightedScore += 1.0;   // In title AND extracted = highest signal
+              } else if (matchedVi.confidence >= 0.8) {
+                weightedScore += 0.85;  // High confidence match
+              } else {
+                weightedScore += 0.65;  // Lower confidence match
+              }
+            } else if (titleMatchedNames.includes(ing)) {
+              weightedScore += 0.90;    // Title-only match (dish name not extracted)
+            }
+          }
+          const sortScore = weightedScore / normalizedIngredients.length;
 
           return {
             id: video.id,
@@ -207,8 +271,8 @@ export const searchRouter = t.router({
             publishedAt: video.publishedAt,
             views: video.views,
             relevanceScore,
-            sortScore: relevanceScore + titleBonus, // used for ordering only
-            matchingCount: matchingIngredients.length,
+            sortScore,
+            matchingCount: totalMatchCount,
             ingredients: video.videoIngredients.map((vi) => ({
               id: vi.ingredient.id,
               name: vi.ingredient.name,
@@ -222,45 +286,52 @@ export const searchRouter = t.router({
           };
         });
 
+        // Minimum relevance threshold:
+        // 1-2 ingredients: require ALL to match (eliminates 50% noise)
+        // 3+ ingredients: allow missing 1 ingredient
+        const minMatchCount = normalizedIngredients.length <= 2
+          ? normalizedIngredients.length
+          : normalizedIngredients.length - 1;
+        const minRelevanceThreshold = minMatchCount / normalizedIngredients.length;
+
         // Filter videos with tiered relevance fallback
-        // Priority: 100% matches > partial matches (if not enough exact) > any matches
         let filteredVideos = [] as typeof analyzedVideosUnfiltered;
         let lowRelevanceFallback = false;
 
-        // First: Get videos with 100% ingredient match (all searched ingredients present)
         const exactMatches = analyzedVideosUnfiltered.filter(
           (video) => video.relevanceScore === 1.0
         );
+        const highMatches = analyzedVideosUnfiltered.filter(
+          (video) => video.relevanceScore >= minRelevanceThreshold && video.relevanceScore < 1.0
+        );
 
         if (exactMatches.length >= 3 || normalizedIngredients.length === 1) {
-          // Enough exact matches OR single ingredient search - use only exact matches
+          // Enough exact matches OR single ingredient search
           filteredVideos = exactMatches;
         } else if (exactMatches.length > 0) {
-          // Some exact matches but not enough - prioritize them, add partial matches
-          const partialMatches = analyzedVideosUnfiltered.filter(
-            (video) => video.relevanceScore >= 0.5 && video.relevanceScore < 1.0
-          );
-          filteredVideos = [...exactMatches, ...partialMatches];
-        } else {
-          // No exact matches - fall back to partial matches (50%+ relevance)
-          const partialMatches = analyzedVideosUnfiltered.filter(
-            (video) => video.relevanceScore >= 0.5
-          );
-
-          if (partialMatches.length > 0) {
-            filteredVideos = partialMatches;
-            lowRelevanceFallback = true;
-          } else if (analyzedVideosUnfiltered.length > 0) {
-            // Last resort: Show any matches but limit to top 6
-            filteredVideos = analyzedVideosUnfiltered.slice(0, 6);
-            lowRelevanceFallback = true;
-          }
+          // Some exact matches - add high-threshold partial matches
+          filteredVideos = [...exactMatches, ...highMatches];
+        } else if (highMatches.length > 0) {
+          // No exact matches but have high-quality partials
+          filteredVideos = highMatches;
+          lowRelevanceFallback = normalizedIngredients.length <= 2;
+        } else if (analyzedVideosUnfiltered.length > 0) {
+          // Last resort: show best available, limited to 6
+          filteredVideos = analyzedVideosUnfiltered
+            .sort((a, b) => b.relevanceScore - a.relevanceScore)
+            .slice(0, 6);
+          lowRelevanceFallback = true;
         }
 
-        // Remove matchingCount and sort by sortScore (relevance + title bonus)
+        // Sort: videos with view data first, then by weighted score
         let analyzedVideos = filteredVideos
           .map(({ matchingCount, ...video }) => video)
-          .sort((a, b) => b.sortScore - a.sortScore);
+          .sort((a, b) => {
+            const aHasViews = a.views != null && a.views > 0 ? 1 : 0;
+            const bHasViews = b.views != null && b.views > 0 ? 1 : 0;
+            if (aHasViews !== bHasViews) return bHasViews - aHasViews;
+            return b.sortScore - a.sortScore;
+          });
 
         // 2. Check cache for YouTube results
         let youtubeVideos = getCachedSearch(normalizedIngredients);
@@ -341,12 +412,24 @@ export const searchRouter = t.router({
               console.warn(`[Search] Tag extraction failed for ${ytVideo.id}:`, tagError);
             }
 
-            // Calculate relevance score
+            // Calculate relevance score (ingredient matches + title matches)
             const matchingIngredients = extractedIngredients.filter(ing =>
               normalizedIngredients.includes(ing.name.toLowerCase())
             );
+            const extractedMatchedNames = new Set(matchingIngredients.map(ing => ing.name.toLowerCase()));
+
+            // Title matching for unmatched search terms (dish names like kofte)
+            const freshTitleLower = ytVideo.snippet.title.toLowerCase();
+            const freshTitleMatched: string[] = [];
+            for (const ing of normalizedIngredients) {
+              if (!extractedMatchedNames.has(ing) && titleContainsIngredient(freshTitleLower, ing)) {
+                freshTitleMatched.push(ing);
+              }
+            }
+
+            const totalFreshMatchCount = matchingIngredients.length + freshTitleMatched.length;
             const relevanceScore = normalizedIngredients.length > 0
-              ? matchingIngredients.length / normalizedIngredients.length
+              ? totalFreshMatchCount / normalizedIngredients.length
               : 0;
 
             // Fetch the ingredient IDs and tags from database for correction system
@@ -361,10 +444,27 @@ export const searchRouter = t.router({
             });
 
             if (videoWithDetails) {
-              // Title match bonus for fresh videos (same logic as DB results)
-              const freshTitleLower = videoWithDetails.title.toLowerCase();
-              const freshTitleMatches = normalizedIngredients.filter(ing => freshTitleLower.includes(ing)).length;
-              const freshTitleBonus = freshTitleMatches / normalizedIngredients.length * 0.1;
+              // Weighted score for ranking (same logic as DB results, with title matching)
+              const detailTitleLower = videoWithDetails.title.toLowerCase();
+              const freshIngMatchedNames = new Set(
+                videoWithDetails.videoIngredients.map(vi => vi.ingredient.name)
+              );
+              let freshWeightedScore = 0;
+              for (const ing of normalizedIngredients) {
+                const matchedVi = videoWithDetails.videoIngredients.find(vi => vi.ingredient.name === ing);
+                if (matchedVi) {
+                  if (detailTitleLower.includes(ing)) {
+                    freshWeightedScore += 1.0;
+                  } else if (matchedVi.confidence >= 0.8) {
+                    freshWeightedScore += 0.85;
+                  } else {
+                    freshWeightedScore += 0.65;
+                  }
+                } else if (!freshIngMatchedNames.has(ing) && titleContainsIngredient(detailTitleLower, ing)) {
+                  freshWeightedScore += 0.90;  // Title-only match (dish name not extracted)
+                }
+              }
+              const freshSortScore = freshWeightedScore / normalizedIngredients.length;
 
               freshAnalyzedVideos.push({
                 id: videoWithDetails.id,
@@ -375,7 +475,7 @@ export const searchRouter = t.router({
                 publishedAt: videoWithDetails.publishedAt,
                 views: videoWithDetails.views,
                 relevanceScore,
-                sortScore: relevanceScore + freshTitleBonus,
+                sortScore: freshSortScore,
                 ingredients: videoWithDetails.videoIngredients.map(vi => ({
                   id: vi.ingredient.id,
                   name: vi.ingredient.name,
@@ -394,10 +494,9 @@ export const searchRouter = t.router({
           }
         }
 
-        // Filter fresh videos by relevance (must have at least one matching ingredient)
-        // and by tag if tag filters are active
+        // Filter fresh videos by same relevance threshold as DB results
         let filteredFreshVideos = freshAnalyzedVideos.filter(
-          video => video.relevanceScore > 0
+          video => video.relevanceScore >= minRelevanceThreshold
         );
 
         if (normalizedTags.length > 0) {
@@ -406,11 +505,15 @@ export const searchRouter = t.router({
           );
         }
 
-        // Merge fresh analyzed videos with existing analyzed videos
-        // Sort by sortScore (relevance + title bonus) then strip internal field
+        // Merge fresh analyzed videos with existing, sort (view data first), cap at 24
         const mergedVideos = [...filteredFreshVideos, ...analyzedVideos];
-        mergedVideos.sort((a, b) => b.sortScore - a.sortScore);
-        const allAnalyzedVideos = mergedVideos.map(({ sortScore, ...video }) => video);
+        mergedVideos.sort((a, b) => {
+          const aHasViews = a.views != null && a.views > 0 ? 1 : 0;
+          const bHasViews = b.views != null && b.views > 0 ? 1 : 0;
+          if (aHasViews !== bHasViews) return bHasViews - aHasViews;
+          return b.sortScore - a.sortScore;
+        });
+        const allAnalyzedVideos = mergedVideos.slice(0, 24).map(({ sortScore, ...video }) => video);
 
         // Process remaining fresh videos in background (fire-and-forget)
         const remainingVideos = freshYoutubeVideosRaw.slice(10);

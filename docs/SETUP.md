@@ -44,15 +44,30 @@ DATABASE_URL="postgresql://..."
 REDIS_URL="redis://..." (optional for now)
 GROQ_API_KEY="gsk_..." (for ingredient extraction - free tier available at console.groq.com)
 YOUTUBE_API_KEY="AIza..." (for YouTube search)
-PORT=3001
+AUTH_SECRET="your-nextauth-secret" (same value as frontend, for JWT verification)
+PORT=4001
 ENVIRONMENT=development
 ```
 
-#### Frontend (`frontend/.env.local`)
+#### Frontend (`frontend/.env`)
 ```
-NEXT_PUBLIC_API_URL="http://localhost:3001"
+NEXT_PUBLIC_API_URL="http://localhost:4001"
 NEXT_PUBLIC_ENVIRONMENT="development"
+
+# NextAuth.js
+AUTH_SECRET="your-nextauth-secret"
+NEXTAUTH_URL=http://localhost:3000
+
+# Google OAuth (get from https://console.cloud.google.com/apis/credentials)
+GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="GOCSPX-your-secret"
 ```
+
+**Google OAuth Setup:**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Create OAuth 2.0 Client ID (Web application)
+3. Add `http://localhost:3000/api/auth/callback/google` to Authorized redirect URIs
+4. Copy Client ID and Client Secret to `frontend/.env`
 
 ### 4. Run Development Servers
 
@@ -63,7 +78,7 @@ npm run dev
 
 This will start:
 - Frontend: http://localhost:3000
-- Backend: http://localhost:3001
+- Backend: http://localhost:4001
 
 Or run separately:
 ```bash
@@ -106,13 +121,17 @@ kitvas/
 - **Automated cron job scheduler** (node-cron + PM2)
 - **Hot Ingredients UI** (trending ingredients display)
 
-🚧 **In Progress:**
-- Week 8: Authentication + Payments
+✅ **Week 8 (Partial):**
+- Authentication implemented (NextAuth v5 + Google OAuth)
+- Backend JWT verification via jose library
+- Protected/admin tRPC procedures
+- Auth token bridging (frontend cookie → backend Authorization header)
 
-📋 **Next Steps:**
-- Set up Supabase Auth (email/password + Google OAuth)
+📋 **Remaining:**
 - Integrate Stripe for subscriptions
-- Enforce feature limits by tier
+- Enforce feature limits by tier (search rate limiting)
+- Analytics dashboard frontend page
+- User profile/stats page
 
 ## 5. Ingest Videos from YouTube
 
@@ -169,10 +188,13 @@ pm2 stop all
 
 | Job | Schedule | Description |
 |-----|----------|-------------|
-| Google Trends Fetch | 1:00 AM | Fetch trending data for top ingredients |
+| Google Trends Fetch | Hourly at :00 | Fetch trending data for top ingredients (worldwide) |
 | Daily Batch Job | 2:00 AM | Ingest new YouTube videos |
-| Trends Aggregation | 3:00 AM | Aggregate trends into demand signals |
-| Data Cleanup | 4:00 AM Sunday | Clean old cache data |
+| Trends Aggregation | 12:10 AM | Aggregate search trends |
+| View Count Refresh | 3:00 AM Sunday | Refresh YouTube view counts |
+| Corrections Aggregation | 4:00 AM Monday | Aggregate ML corrections |
+| Opportunity Calibration | 5:00 AM Tuesday | Calibrate opportunity scoring |
+| Wikidata Ingredients | 6:00 AM Wednesday | Fetch ingredients from Wikidata |
 
 ### Manual Execution
 
@@ -182,7 +204,7 @@ Run individual jobs manually:
 cd backend
 
 # Fetch Google Trends data
-npm run trends:daily
+npm run trends:hourly
 
 # Run batch video ingestion
 npm run batch:daily

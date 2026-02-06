@@ -29,6 +29,7 @@ import {
   findGapOpportunities,
 } from '../lib/query-generator.js';
 import { processVideoIngredients } from '../lib/ingredient-extractor.js';
+import { fetchTranscript } from '../lib/transcript-fetcher.js';
 
 // Load environment variables
 config();
@@ -162,19 +163,29 @@ async function runDailyBatchJob() {
               },
             });
 
-            // Extract ingredients immediately (pre-crawl strategy)
+            // Fetch transcript for better ingredient extraction
+            let transcript: string | null = null;
+            try {
+              transcript = await fetchTranscript(youtubeId);
+              if (transcript) {
+                console.log(`   📝 Transcript fetched (${transcript.length} chars)`);
+              }
+            } catch { /* continue without transcript */ }
+
+            // Extract ingredients (transcript-first when available)
             const ingredientCount = await processVideoIngredients(
               prisma,
               storedVideo.id,
               snippet.title,
-              snippet.description || null
+              snippet.description || null,
+              transcript
             );
 
             stats.videosIngested++;
             stats.ingredientsExtracted += ingredientCount;
 
-            // Rate limiting
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Rate limiting (2s to respect transcript API)
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
           } catch (error: any) {
             stats.errors++;

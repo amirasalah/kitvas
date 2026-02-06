@@ -9,6 +9,18 @@ import type { AppRouter } from '@/lib/trpc'
 
 export const trpc = createTRPCReact<AppRouter>()
 
+function getSessionToken(): string | undefined {
+  if (typeof document === 'undefined') return undefined
+  const cookies = document.cookie.split(';')
+  for (const cookie of cookies) {
+    const [key, ...rest] = cookie.trim().split('=')
+    if (key === 'authjs.session-token' || key === '__Secure-authjs.session-token') {
+      return decodeURIComponent(rest.join('='))
+    }
+  }
+  return undefined
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient())
   const [trpcClient] = useState(() =>
@@ -16,6 +28,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       links: [
         httpBatchLink({
           url: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/trpc`,
+          headers() {
+            const token = getSessionToken()
+            return token ? { authorization: `Bearer ${token}` } : {}
+          },
         }),
       ],
     })

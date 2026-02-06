@@ -1,5 +1,4 @@
-import { initTRPC } from '@trpc/server';
-import type { Context } from './context.js';
+import { t } from './trpc.js';
 import { searchRouter } from './routers/search.js';
 import { correctionsRouter } from './routers/corrections.js';
 import { opportunitiesRouter } from './routers/opportunities.js';
@@ -7,8 +6,6 @@ import { outcomesRouter } from './routers/outcomes.js';
 import { adminRouter } from './routers/admin.js';
 import { analyticsRouter } from './routers/analytics.js';
 import { gapsRouter } from './routers/gaps.js';
-
-const t = initTRPC.context<Context>().create();
 
 export const appRouter = t.router({
   search: searchRouter,

@@ -320,7 +320,7 @@ model GoogleTrend {
   interestValue Int      // 0-100 Google Trends score
   isBreakout    Boolean  @default(false) // >5000% growth indicator
   date          DateTime // The date this data point represents
-  region        String   @default("US") // Geographic region
+  region        String   @default("worldwide") // Geographic region
   fetchedAt     DateTime @default(now())
 
   @@unique([keyword, date, region])

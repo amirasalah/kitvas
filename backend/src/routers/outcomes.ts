@@ -7,11 +7,8 @@
  */
 
 import { z } from 'zod';
-import { TRPCError, initTRPC } from '@trpc/server';
-import type { Context } from '../context.js';
-import { getStableAnonymousId } from '../lib/anonymous-user.js';
-
-const t = initTRPC.context<Context>().create();
+import { TRPCError } from '@trpc/server';
+import { t, protectedProcedure } from '../trpc.js';
 
 const SubmitOutcomeSchema = z.object({
   trackedOpportunityId: z.string(),
@@ -25,18 +22,18 @@ export const outcomesRouter = t.router({
   /**
    * Submit an outcome for a tracked opportunity
    */
-  submit: t.procedure
+  submit: protectedProcedure
     .input(SubmitOutcomeSchema)
     .mutation(async ({ input, ctx }) => {
       const { trackedOpportunityId, videoUrl, views7day, rating, didNotPublish } = input;
-      const tempUserId = getStableAnonymousId(ctx);
+      const userId = ctx.userId;
 
       try {
         // Verify opportunity exists and belongs to user
         const opportunity = await ctx.prisma.trackedOpportunity.findFirst({
           where: {
             id: trackedOpportunityId,
-            userId: tempUserId,
+            userId,
           },
         });
 
@@ -70,7 +67,7 @@ export const outcomesRouter = t.router({
           await ctx.prisma.outcome.create({
             data: {
               trackedOpportunityId,
-              userId: tempUserId,
+              userId,
               rating: 0, // 0 indicates abandoned
             },
           });
@@ -85,7 +82,7 @@ export const outcomesRouter = t.router({
         const outcome = await ctx.prisma.outcome.create({
           data: {
             trackedOpportunityId,
-            userId: tempUserId,
+            userId,
             videoUrl: videoUrl || null,
             views7day: views7day || null,
             rating: rating || null,
@@ -134,14 +131,14 @@ export const outcomesRouter = t.router({
   /**
    * Get user's outcome stats
    */
-  getStats: t.procedure.query(async ({ ctx }) => {
-    const tempUserId = getStableAnonymousId(ctx);
+  getStats: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.userId;
 
     try {
       // Get all user outcomes with opportunity data
       const outcomes = await ctx.prisma.outcome.findMany({
         where: {
-          userId: tempUserId,
+          userId,
           rating: { gt: 0 }, // Exclude abandoned (rating=0)
         },
         include: {

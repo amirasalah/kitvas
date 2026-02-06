@@ -62,8 +62,11 @@ YOUTUBE_API_KEY="AIzaSyBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 # Groq API (for ingredient extraction - free tier available)
 GROQ_API_KEY="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
+# Auth (same secret as frontend, for JWT verification)
+AUTH_SECRET="your-nextauth-secret"
+
 # Optional
-PORT=3001
+PORT=4001
 ENVIRONMENT=development
 ```
 

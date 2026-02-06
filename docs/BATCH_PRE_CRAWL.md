@@ -19,24 +19,34 @@ This approach ensures fast search responses and enables ingredient-level intelli
 │  (Runs automatically via PM2 or npm run scheduler)          │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  1:00 AM - Google Trends Fetch                               │
-│     ├─ Fetch trends for top 50 ingredients                  │
+│  Every Hour (:00) - Google Trends Fetch                       │
+│     ├─ Fetch trends for top 50 ingredients (worldwide)      │
 │     ├─ Discover related rising queries                      │
-│     └─ Store in GoogleTrend table                           │
+│     ├─ Store in GoogleTrend table (1h cache TTL)            │
+│     └─ Log execution to GoogleTrendsJobLog                  │
 │                                                              │
-│  2:00 AM - Daily Batch Job                                   │
+│  12:10 AM - Trends Aggregation                                │
+│     ├─ Combine Google Trends + YouTube metrics              │
+│     ├─ Calculate enhanced demand scores                     │
+│     └─ Update DemandSignal table                            │
+│                                                              │
+│  2:00 AM - Daily Batch Job                                    │
 │     ├─ Generate intelligent queries                         │
 │     ├─ Fetch videos from YouTube API                        │
 │     ├─ Extract ingredients (title/description/transcript)   │
 │     └─ Store videos + ingredients in database               │
 │                                                              │
-│  3:00 AM - Trends Aggregation                                │
-│     ├─ Combine Google Trends + YouTube metrics              │
-│     ├─ Calculate enhanced demand scores                     │
-│     └─ Update DemandSignal table                            │
+│  3:00 AM Sunday - View Count Refresh                          │
+│     └─ Refresh YouTube view counts for existing videos      │
 │                                                              │
-│  4:00 AM Sunday - Data Cleanup                               │
-│     └─ Clean old cache and processed data                   │
+│  4:00 AM Monday - Corrections Aggregation                     │
+│     └─ Aggregate ML corrections from user feedback          │
+│                                                              │
+│  5:00 AM Tuesday - Opportunity Calibration                    │
+│     └─ Calibrate opportunity scoring thresholds             │
+│                                                              │
+│  6:00 AM Wednesday - Wikidata Ingredients                     │
+│     └─ Fetch new ingredients from Wikidata                  │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
                           │
@@ -98,12 +108,15 @@ pm2 start ecosystem.config.cjs
 
 | Job | Schedule | Description |
 |-----|----------|-------------|
-| Google Trends Fetch | 1:00 AM | Fetch trending data for top ingredients |
+| Google Trends Fetch | Hourly at :00 | Fetch trending data for top ingredients (worldwide, 1h cache) |
+| Trends Aggregation | 12:10 AM | Aggregate trends data into demand signals |
 | Daily Batch Job | 2:00 AM | Ingest new YouTube videos |
-| Trends Aggregation | 3:00 AM | Aggregate trends data into demand signals |
-| Data Cleanup | 4:00 AM (Sunday) | Clean old cache and processed data |
+| View Count Refresh | 3:00 AM (Sunday) | Refresh YouTube view counts |
+| Corrections Aggregation | 4:00 AM (Monday) | Aggregate ML corrections from user feedback |
+| Opportunity Calibration | 5:00 AM (Tuesday) | Calibrate opportunity scoring thresholds |
+| Wikidata Ingredients | 6:00 AM (Wednesday) | Fetch new ingredients from Wikidata |
 
-All jobs are defined in `backend/src/scheduler/index.ts`.
+All jobs are defined in `backend/src/cron/config.ts`.
 
 #### Using PM2 (Local Development)
 
@@ -137,21 +150,21 @@ If you prefer system cron over the built-in scheduler:
 # Add to crontab
 crontab -e
 
-# Google Trends - 1 AM daily
-0 1 * * * cd /path/to/kitvas/backend && npm run trends:daily >> logs/trends.log 2>&1
+# Google Trends - every hour
+0 * * * * cd /path/to/kitvas/backend && npm run trends:hourly >> logs/trends.log 2>&1
+
+# Trends aggregation - 12:10 AM daily
+10 0 * * * cd /path/to/kitvas/backend && npm run aggregate:trends >> logs/aggregate.log 2>&1
 
 # Batch job - 2 AM daily
 0 2 * * * cd /path/to/kitvas/backend && npm run batch:daily >> logs/batch.log 2>&1
-
-# Trends aggregation - 3 AM daily
-0 3 * * * cd /path/to/kitvas/backend && npm run aggregate:trends >> logs/aggregate.log 2>&1
 ```
 
 #### NPM Scripts for Manual Execution
 
 ```bash
 # Run individual jobs manually
-npm run trends:daily      # Fetch Google Trends
+npm run trends:hourly     # Fetch Google Trends
 npm run batch:daily       # Ingest YouTube videos
 npm run aggregate:trends  # Aggregate trend data
 npm run scheduler         # Start the scheduler daemon
@@ -292,14 +305,15 @@ The batch system now includes Google Trends data for enhanced demand intelligenc
 
 ### Data Flow
 
-1. **Daily Trends Fetch** (`backend/src/scripts/fetch-google-trends.ts`)
-   - Runs at 1:00 AM before the main batch job
+1. **Hourly Trends Fetch** (`backend/src/scripts/fetch-google-trends.ts`)
+   - Runs every hour at :00 (worldwide region)
    - Fetches interest data for top 50 ingredients
    - Discovers related rising queries (emerging trends)
    - Stores in `GoogleTrend` and `GoogleTrendRelatedQuery` tables
+   - Uses 1-hour cache TTL to minimize API requests
 
 2. **Trends Aggregation** (`backend/src/scripts/aggregate-trends.ts`)
-   - Runs at 3:00 AM after batch job completes
+   - Runs at 12:10 AM daily
    - Combines Google Trends + YouTube metrics
    - Updates `DemandSignal` table with enhanced scores
    - Identifies breakout ingredients (>5000% growth)
@@ -321,7 +335,7 @@ The batch system now includes Google Trends data for enhanced demand intelligenc
 - 5 requests per minute to Google Trends
 - Random 1-3 second delays between requests
 - Exponential backoff on 429 errors
-- 24-hour cache TTL for daily data
+- 1-hour cache TTL for hourly data
 
 ---
 

@@ -7,11 +7,8 @@
  */
 
 import { z } from 'zod';
-import { TRPCError, initTRPC } from '@trpc/server';
-import type { Context } from '../context.js';
-import { getStableAnonymousId } from '../lib/anonymous-user.js';
-
-const t = initTRPC.context<Context>().create();
+import { TRPCError } from '@trpc/server';
+import { t, protectedProcedure } from '../trpc.js';
 
 const TrackOpportunitySchema = z.object({
   ingredients: z.array(z.string()).min(1),
@@ -31,34 +28,23 @@ export const opportunitiesRouter = t.router({
   /**
    * Track a new opportunity
    */
-  track: t.procedure
+  track: protectedProcedure
     .input(TrackOpportunitySchema)
     .mutation(async ({ input, ctx }) => {
-      const { ingredients, opportunityScore, opportunityType, title } = input;
-
-      // For now, generate a temporary user ID if not authenticated
-      const tempUserId = getStableAnonymousId(ctx);
+      const { ingredients, opportunityScore } = input;
+      const userId = ctx.userId;
 
       try {
-        // Ensure user exists
-        let user = await ctx.prisma.user.findUnique({
-          where: { id: tempUserId },
+        // Check free tier limit (5 active opportunities)
+        const user = await ctx.prisma.user.findUnique({
+          where: { id: userId },
+          select: { subscription: true },
         });
 
-        if (!user) {
-          user = await ctx.prisma.user.create({
-            data: {
-              id: tempUserId,
-              email: `${tempUserId}@temp.kitvas.com`,
-            },
-          });
-        }
-
-        // Check free tier limit (5 active opportunities)
-        if (user.subscription === 'free') {
+        if (user?.subscription === 'free') {
           const activeCount = await ctx.prisma.trackedOpportunity.count({
             where: {
-              userId: user.id,
+              userId,
               status: { in: ['researching', 'filming'] },
             },
           });
@@ -75,7 +61,7 @@ export const opportunitiesRouter = t.router({
         const normalizedIngredients = ingredients.map(i => i.toLowerCase().trim()).sort();
         const existing = await ctx.prisma.trackedOpportunity.findFirst({
           where: {
-            userId: user.id,
+            userId,
             ingredients: { equals: normalizedIngredients },
             status: { in: ['researching', 'filming'] },
           },
@@ -93,7 +79,7 @@ export const opportunitiesRouter = t.router({
         // Create the tracked opportunity
         const opportunity = await ctx.prisma.trackedOpportunity.create({
           data: {
-            userId: user.id,
+            userId,
             ingredients: normalizedIngredients,
             status: 'researching',
             opportunityScore,
@@ -120,18 +106,18 @@ export const opportunitiesRouter = t.router({
   /**
    * Update opportunity status
    */
-  updateStatus: t.procedure
+  updateStatus: protectedProcedure
     .input(UpdateStatusSchema)
     .mutation(async ({ input, ctx }) => {
       const { opportunityId, status } = input;
-      const tempUserId = getStableAnonymousId(ctx);
+      const userId = ctx.userId;
 
       try {
         // Verify opportunity exists and belongs to user
         const opportunity = await ctx.prisma.trackedOpportunity.findFirst({
           where: {
             id: opportunityId,
-            userId: tempUserId,
+            userId,
           },
         });
 
@@ -170,13 +156,13 @@ export const opportunitiesRouter = t.router({
   /**
    * List user's tracked opportunities
    */
-  list: t.procedure.query(async ({ ctx }) => {
-    const tempUserId = getStableAnonymousId(ctx);
+  list: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.userId;
 
     try {
       // Get user's tracked opportunities
       const opportunities = await ctx.prisma.trackedOpportunity.findMany({
-        where: { userId: tempUserId },
+        where: { userId },
         orderBy: { trackedAt: 'desc' },
         include: {
           outcomes: {
@@ -188,7 +174,7 @@ export const opportunitiesRouter = t.router({
 
       // Get user subscription for limit info
       const user = await ctx.prisma.user.findUnique({
-        where: { id: tempUserId },
+        where: { id: userId },
         select: { subscription: true },
       });
 
@@ -224,18 +210,18 @@ export const opportunitiesRouter = t.router({
   /**
    * Delete/untrack an opportunity
    */
-  delete: t.procedure
+  delete: protectedProcedure
     .input(z.object({ opportunityId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const { opportunityId } = input;
-      const tempUserId = getStableAnonymousId(ctx);
+      const userId = ctx.userId;
 
       try {
         // Verify opportunity exists and belongs to user
         const opportunity = await ctx.prisma.trackedOpportunity.findFirst({
           where: {
             id: opportunityId,
-            userId: tempUserId,
+            userId,
           },
         });
 
@@ -268,8 +254,8 @@ export const opportunitiesRouter = t.router({
   /**
    * Get opportunities that need outcome reporting (published 30+ days ago)
    */
-  getPendingOutcomes: t.procedure.query(async ({ ctx }) => {
-    const tempUserId = getStableAnonymousId(ctx);
+  getPendingOutcomes: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.userId;
 
     try {
       const thirtyDaysAgo = new Date();
@@ -278,7 +264,7 @@ export const opportunitiesRouter = t.router({
       // Find published opportunities without outcomes
       const pending = await ctx.prisma.trackedOpportunity.findMany({
         where: {
-          userId: tempUserId,
+          userId,
           status: 'published',
           outcomes: { none: {} },
           trackedAt: { lte: thirtyDaysAgo },

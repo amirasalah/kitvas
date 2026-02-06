@@ -36,6 +36,7 @@ import {
   QueryGenerationOptions,
 } from '../lib/query-generator.js';
 import { processVideoIngredients } from '../lib/ingredient-extractor.js';
+import { fetchTranscript } from '../lib/transcript-fetcher.js';
 
 // Load environment variables from .env file
 config();
@@ -128,26 +129,32 @@ async function ingestVideos(options: IngestionOptions) {
             },
           });
 
-          // Extract ingredients immediately (pre-crawl strategy)
+          // Fetch transcript for better ingredient extraction
+          let transcript: string | null = null;
+          try {
+            transcript = await fetchTranscript(youtubeId);
+          } catch { /* continue without transcript */ }
+
+          // Extract ingredients (transcript-first when available)
           const ingredientCount = await processVideoIngredients(
             prisma,
             storedVideo.id,
             snippet.title,
-            snippet.description || null
+            snippet.description || null,
+            transcript
           );
 
           totalIngested++;
           totalIngredientsExtracted += ingredientCount;
-          
+
           if (ingredientCount > 0) {
-            console.log(`   ✅ Stored + extracted ${ingredientCount} ingredients: "${snippet.title.substring(0, 50)}..."`);
+            console.log(`   ✅ Stored + extracted ${ingredientCount} ingredients${transcript ? ' (with transcript)' : ''}: "${snippet.title.substring(0, 50)}..."`);
           } else {
             console.log(`   ✅ Stored (no ingredients found): "${snippet.title.substring(0, 50)}..."`);
           }
-          
-          // Rate limiting: YouTube API has quotas
-          // Wait 100ms between videos to avoid hitting rate limits
-          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Rate limiting (2s to respect transcript API)
+          await new Promise(resolve => setTimeout(resolve, 2000));
           
         } catch (error: any) {
           totalErrors++;

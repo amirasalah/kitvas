@@ -1,9 +1,7 @@
 import { z } from 'zod';
-import { initTRPC } from '@trpc/server';
+import { t } from '../trpc.js';
 import type { Context } from '../context.js';
 import { getTrendsBoost } from '../lib/google-trends/fetcher.js';
-
-const t = initTRPC.context<Context>().create();
 
 const GapsInputSchema = z.object({
   ingredients: z.array(z.string()).min(1).max(5),
@@ -43,6 +41,16 @@ export const gapsRouter = t.router({
       return findGapsFromRecipeAnalysis(ctx, normalizedIngredients);
     }),
 });
+
+// Ubiquitous ingredients that appear in most recipes — never useful as gap suggestions
+const UBIQUITOUS_INGREDIENTS = new Set([
+  'salt', 'pepper', 'black pepper', 'oil', 'olive oil', 'vegetable oil',
+  'cooking oil', 'garlic', 'onion', 'butter', 'water', 'sugar', 'flour',
+  'all-purpose flour', 'egg', 'eggs', 'milk', 'cream', 'lemon juice',
+  'soy sauce', 'vinegar', 'rice', 'white rice', 'sesame oil',
+  'kosher salt', 'sea salt', 'canola oil', 'sunflower oil',
+  'ground black pepper', 'unsalted butter', 'salted butter',
+]);
 
 /**
  * Find content gaps by analyzing successful recipe videos.
@@ -134,8 +142,9 @@ async function findGapsFromRecipeAnalysis(
 
     for (const vi of video.videoIngredients) {
       const ingName = vi.ingredient.name;
-      // Skip base ingredients
+      // Skip base ingredients and ubiquitous ingredients
       if (baseIngredients.includes(ingName)) continue;
+      if (UBIQUITOUS_INGREDIENTS.has(ingName)) continue;
 
       const existing = coOccurrences.get(ingName) || {
         weightedScore: 0,

@@ -67,9 +67,12 @@ See `SETUP.md` for detailed environment variable setup.
    GROQ_API_KEY="your-groq-api-key"  # Free at console.groq.com
    ```
 
-2. Create `frontend/.env.local` with:
+2. Create `frontend/.env` with:
    ```
-   NEXT_PUBLIC_API_URL="http://localhost:3001"
+   NEXT_PUBLIC_API_URL="http://localhost:4001"
+   AUTH_SECRET="your-auth-secret"
+   GOOGLE_CLIENT_ID="your-google-client-id"
+   GOOGLE_CLIENT_SECRET="your-google-client-secret"
    ```
 
 ### Database Setup
@@ -106,7 +109,7 @@ pm2 status
 
 Or run individual jobs manually:
 ```bash
-npm run trends:daily      # Fetch Google Trends data
+npm run trends:hourly     # Fetch Google Trends data (runs hourly by default)
 npm run batch:daily       # Ingest YouTube videos
 npm run aggregate:trends  # Aggregate trends into demand signals
 npm run scheduler         # Start scheduler daemon
@@ -116,9 +119,10 @@ See `SETUP.md` for more details.
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14, Tailwind CSS, shadcn/ui, tRPC
-- **Backend**: Hono, tRPC, Prisma, PostgreSQL
+- **Frontend**: Next.js 14, Tailwind CSS, shadcn/ui, tRPC, NextAuth v5 (Google OAuth)
+- **Backend**: Hono, tRPC, Prisma, PostgreSQL, jose (JWT verification)
 - **AI**: Groq (Llama 3.3 70B) for ingredient extraction
+- **Auth**: NextAuth v5 (beta.30) with JWE tokens, decrypted on backend via jose
 - **Infrastructure**: Railway, Supabase, Upstash Redis
 
 ## Features (V1)
@@ -141,13 +145,20 @@ See `SETUP.md` for more details.
 - **Opportunity Tracking**: Track and manage content ideas through your pipeline
 - **Outcome Reporting**: Report video performance to calibrate prediction accuracy
 
+### Authentication
+
+- **Google OAuth**: Sign in with Google via NextAuth v5
+- **JWT Verification**: Backend decrypts NextAuth JWE tokens using jose library
+- **Protected Routes**: Opportunities, outcomes, user stats require authentication
+- **Admin Access**: Admin endpoints restricted by email allowlist
+
 ### Google Trends Integration
 
 - **External Validation**: Google Trends data validates internal demand signals
 - **Breakout Detection**: Identifies ingredients with >5000% growth (immediate opportunities)
 - **Rising Queries**: Discover related trending queries for content angle ideas
 - **Enhanced Confidence**: Demand scores boosted when internal + external signals align
-- **Automated Fetching**: Daily cron job fetches trends for top 50 ingredients
+- **Automated Fetching**: Hourly cron job fetches trends for top ingredients (worldwide region)
 
 ### ML Training & Analytics
 - **Analytics API**: Trending ingredients, seasonal patterns, content gaps, co-occurrence

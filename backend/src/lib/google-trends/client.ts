@@ -15,7 +15,7 @@ export class GoogleTrendsClient {
 
   constructor(options?: { rateLimiter?: TrendsRateLimiter; geo?: string }) {
     this.rateLimiter = options?.rateLimiter || getGlobalRateLimiter();
-    this.geo = options?.geo || 'US';
+    this.geo = options?.geo || ''; // Empty string = worldwide
   }
 
   /**
