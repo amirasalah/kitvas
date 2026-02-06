@@ -173,8 +173,8 @@ export function SearchInput({
       e.preventDefault()
       if (inputValue.trim()) {
         addIngredients(inputValue)
-      } else if (ingredients.length > 0) {
-        // Trigger search when Enter is pressed with empty input
+      } else if (ingredients.length >= 2) {
+        // Trigger search when Enter is pressed with empty input (requires 2+ ingredients)
         onSearch()
         setShowSuggestions(false)
       }
@@ -300,7 +300,7 @@ export function SearchInput({
               </button>
 
               {/* Search Button */}
-              {ingredients.length > 0 && (
+              {ingredients.length >= 2 && (
                 <button
                   onClick={() => {
                     onSearch()
@@ -456,7 +456,12 @@ export function SearchInput({
         {/* Hint Text */}
         {ingredients.length === 0 && (
           <p className="text-xs text-gray-400 mt-2 px-2">
-            Press space to separate ingredients, click Search or press Enter when done
+            Add at least 2 ingredients to search (e.g., chicken + garlic)
+          </p>
+        )}
+        {ingredients.length === 1 && (
+          <p className="text-xs text-amber-500 mt-2 px-2">
+            Add at least one more ingredient to search
           </p>
         )}
         {ingredients.length >= 10 && (

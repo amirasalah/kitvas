@@ -80,7 +80,7 @@ export function SearchPage() {
   )
 
   const handleSearch = () => {
-    if (ingredients.length > 0) {
+    if (ingredients.length >= 2) {
       setSearchIngredients([...ingredients])
       setSearchTags([...tags])
       saveToHistory([...ingredients])
@@ -154,8 +154,6 @@ export function SearchPage() {
               <TrendingIngredients
                 onIngredientClick={(ingredient) => {
                   setIngredients([ingredient])
-                  setSearchIngredients([ingredient])
-                  setSearchTags([])
                 }}
               />
             </div>
@@ -198,7 +196,6 @@ export function SearchPage() {
             rateLimitRemaining={searchQuery.data.rateLimitRemaining}
             opportunities={searchQuery.data.opportunities}
             ingredients={ingredients}
-            lowRelevanceFallback={searchQuery.data.lowRelevanceFallback}
             onAddIngredient={(ing) => {
                 const newIngredients = [...ingredients, ing]
                 setIngredients(newIngredients)

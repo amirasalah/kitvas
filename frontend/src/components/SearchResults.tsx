@@ -23,7 +23,6 @@ interface SearchResultsProps {
   rateLimitRemaining?: number
   opportunities: ContentOpportunity[]
   ingredients: string[]
-  lowRelevanceFallback?: boolean
   onAddIngredient?: (ingredient: string) => void
 }
 
@@ -35,7 +34,6 @@ export function SearchResults({
   rateLimitRemaining,
   opportunities,
   ingredients,
-  lowRelevanceFallback,
   onAddIngredient,
 }: SearchResultsProps) {
   const { data: session, status } = useSession()
@@ -287,7 +285,6 @@ export function SearchResults({
       {analyzedVideos.length > 0 && (
         <AnalyzedVideosSection
           videos={analyzedVideos}
-          lowRelevanceFallback={lowRelevanceFallback}
         />
       )}
     </div>
@@ -651,10 +648,8 @@ type SortOption = 'relevance' | 'views' | 'newest'
 
 function AnalyzedVideosSection({
   videos,
-  lowRelevanceFallback,
 }: {
   videos: VideoResult[]
-  lowRelevanceFallback?: boolean
 }) {
   const [sortBy, setSortBy] = useState<SortOption>('relevance')
 
@@ -705,11 +700,6 @@ function AnalyzedVideosSection({
           ))}
         </div>
       </div>
-      {lowRelevanceFallback && (
-        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
-          <span className="font-medium">Note:</span> No exact matches found. Showing partially matching videos.
-        </div>
-      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {sortedVideos.map((video) => (
           <VideoCard key={video.id} video={video} />

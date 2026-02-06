@@ -13,7 +13,7 @@ import { getTrendsBoost } from '../lib/google-trends/fetcher.js';
 import { normalizeIngredient, getSynonymMatches, getSynonyms } from '../lib/ingredient-synonyms.js';
 
 const SearchInputSchema = z.object({
-  ingredients: z.array(z.string()).min(1).max(10),
+  ingredients: z.array(z.string()).min(2).max(10),
   tags: z.array(z.string()).optional(),
 });
 
@@ -286,42 +286,10 @@ export const searchRouter = t.router({
           };
         });
 
-        // Minimum relevance threshold:
-        // 1-2 ingredients: require ALL to match (eliminates 50% noise)
-        // 3+ ingredients: allow missing 1 ingredient
-        const minMatchCount = normalizedIngredients.length <= 2
-          ? normalizedIngredients.length
-          : normalizedIngredients.length - 1;
-        const minRelevanceThreshold = minMatchCount / normalizedIngredients.length;
-
-        // Filter videos with tiered relevance fallback
-        let filteredVideos = [] as typeof analyzedVideosUnfiltered;
-        let lowRelevanceFallback = false;
-
-        const exactMatches = analyzedVideosUnfiltered.filter(
+        // Strict 100% match: ALL searched ingredients must be in the video
+        const filteredVideos = analyzedVideosUnfiltered.filter(
           (video) => video.relevanceScore === 1.0
         );
-        const highMatches = analyzedVideosUnfiltered.filter(
-          (video) => video.relevanceScore >= minRelevanceThreshold && video.relevanceScore < 1.0
-        );
-
-        if (exactMatches.length >= 3 || normalizedIngredients.length === 1) {
-          // Enough exact matches OR single ingredient search
-          filteredVideos = exactMatches;
-        } else if (exactMatches.length > 0) {
-          // Some exact matches - add high-threshold partial matches
-          filteredVideos = [...exactMatches, ...highMatches];
-        } else if (highMatches.length > 0) {
-          // No exact matches but have high-quality partials
-          filteredVideos = highMatches;
-          lowRelevanceFallback = normalizedIngredients.length <= 2;
-        } else if (analyzedVideosUnfiltered.length > 0) {
-          // Last resort: show best available, limited to 6
-          filteredVideos = analyzedVideosUnfiltered
-            .sort((a, b) => b.relevanceScore - a.relevanceScore)
-            .slice(0, 6);
-          lowRelevanceFallback = true;
-        }
 
         // Sort: videos with view data first, then by weighted score
         let analyzedVideos = filteredVideos
@@ -494,9 +462,9 @@ export const searchRouter = t.router({
           }
         }
 
-        // Filter fresh videos by same relevance threshold as DB results
+        // Filter fresh videos: strict 100% match only
         let filteredFreshVideos = freshAnalyzedVideos.filter(
-          video => video.relevanceScore >= minRelevanceThreshold
+          video => video.relevanceScore === 1.0
         );
 
         if (normalizedTags.length > 0) {
@@ -609,8 +577,8 @@ export const searchRouter = t.router({
           }>,
           // Rate limit info
           rateLimitRemaining,
-          // Flag indicating low-relevance fallback was used
-          lowRelevanceFallback,
+          // No partial matches — strict 100% match enforced
+          lowRelevanceFallback: false,
           // Legacy field for backward compatibility
           videos: allAnalyzedVideos,
           // YouTube market-based demand signals
