@@ -1389,7 +1389,7 @@ describe('Ingredient extraction model', () => {
 **Before Launch:**
 
 **Frontend:**
-- [ ] Search works with 1-10 ingredients
+- [ ] Search works with 2-10 ingredients (minimum 2 required)
 - [ ] Ingredient chips add/remove correctly
 - [ ] Results display with correct data
 - [ ] Corrections submit and show impact

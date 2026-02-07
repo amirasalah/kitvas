@@ -275,9 +275,10 @@ Ingredient extraction now includes YouTube video transcripts for better accuracy
    - **Extraction**: Transcripts passed to Groq LLM for ingredient extraction
 
 3. **Source Tracking**
-   - Ingredients from transcripts have `source: 'transcript'`
-   - Confidence capped at 0.80 (slightly lower than title/description)
-   - Title/description sources take priority over transcript for same ingredient
+   - Ingredients from transcripts have `source: 'transcript'` with confidence 0.95 (primary source)
+   - Ingredients from title/description have confidence 0.75 (supplementary source)
+   - Transcripts are the primary extraction source; title/description supplement with additional ingredients
+   - When no transcript is available, title/description extraction uses confidence 0.85 as fallback
 
 ### Usage
 

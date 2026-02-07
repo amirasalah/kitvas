@@ -80,24 +80,17 @@
    - `underserved`: High demand but limited supply
    - `trending`: Emerging topic gaining momentum
 
-5. **Relevance Filtering** (Bug Fix)
-   - Fixed misleading demand signals (e.g., "banana, miso, cinnamon" showing HOT)
-   - Videos now filtered by ingredient relevance (≥50% of searched ingredients must match)
-   - If <3 relevant videos found, returns `niche` or `unknown` instead of misleading high demand
+5. **Strict 100% Match Filtering**
+   - ALL searched ingredients must be present in a video for it to appear in results
+   - Videos with `relevanceScore === 1.0` only — no partial matches shown
+   - If no videos match all ingredients, the empty state is displayed
+   - Applies to both pre-crawled database videos and fresh YouTube results
 
-6. **Analyzed Videos Relevance Filtering** (Bug Fix)
-   - **Problem**: Searching "banana, kiwi, chocolate, cream" returned irrelevant videos (e.g., miso pasta) because ANY video with just ONE matching ingredient appeared
-   - **Solution**: Added minimum relevance threshold for analyzed videos
-   - **Business Rule**: Videos must match at least 50% of searched ingredients OR at least 2 ingredients (whichever is easier to meet)
-   - **Example**: For 4 ingredients search, video needs at least 2 matching ingredients to appear
-   - **Rationale**: Users expect relevant results, not videos that happen to share one common ingredient
-
-7. **Low-Relevance Fallback** (Enhancement)
-   - **Problem**: Strict filtering could return ZERO analyzed videos for unusual ingredient combinations, hiding the correction system
-   - **Solution**: If strict filtering returns no results, fall back to showing videos with at least 1 matching ingredient
-   - **UX**: Shows yellow warning message: "No exact matches found. Showing partially matching videos - click ingredients to correct them."
-   - **Limit**: Fallback shows max 6 videos to avoid clutter
-   - **Rationale**: Users should always be able to see and correct ingredient data, even for unusual searches
+6. **Minimum 2 Ingredients Required**
+   - Search requires at least 2 ingredients (enforced in both backend schema and frontend UI)
+   - Search button hidden until 2+ ingredients are added
+   - Hint text guides users: "Add at least 2 ingredients to search"
+   - Trending ingredient clicks add to input but don't auto-trigger search
 
 8. **Inline Ingredient Extraction for Fresh Videos** (Major Enhancement)
    - **Problem**: Fresh YouTube videos showed without ingredients, relevance scores, or correction system
@@ -490,13 +483,23 @@ Opportunity scoring is integrated with the demand intelligence system from Week 
 - Ingredient popularity tracking over time
 - Video count and average views per ingredient
 
-### Transcript Support ✅
+### Transcript-First Extraction ✅
 
 **YouTube Transcript Fetching** (`backend/src/lib/transcript-fetcher.ts`):
 - Fetches transcripts using `youtube-transcript` package
 - No YouTube API quota cost (free, unofficial API)
-- Integrated into search flow and background processing
-- Ingredients extracted from transcripts with `source: 'transcript'`
+- Integrated into search flow, batch processing, and background processing
+- **Transcripts are the PRIMARY extraction source** (confidence 0.95)
+- Title/description extraction is supplementary (confidence 0.75)
+- When no transcript available, title/description fallback uses confidence 0.85
+
+### Title-Based Supplementary Matching ✅
+
+**Title matching augments ingredient detection** (`backend/src/routers/search.ts`):
+- `titleContainsIngredient()` helper checks video titles for ingredient names
+- Synonym expansion via `getSynonyms()` — e.g., "kofte" matches "kofta", "kofte", "köfte"
+- Videos matching ingredients in title get boosted relevance scores
+- Enables matching dish names and ingredients that appear in titles but not in extracted ingredient lists
 
 #### Files Created
 

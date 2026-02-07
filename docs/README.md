@@ -128,7 +128,8 @@ See `SETUP.md` for more details.
 ## Features (V1)
 
 ### Core Search & Discovery
-- **Ingredient-based Search**: Search by ingredients, see relevant recipe videos
+- **Ingredient-based Search**: Search by 2+ ingredients with strict 100% match — all searched ingredients must be present in a video
+- **Title + Ingredient Matching**: Matches both extracted ingredients and dish names in video titles (e.g., "kofte" matches via synonym expansion)
 - **Tag Filtering**: Filter by cooking method (air fryer, oven, etc.), dietary (vegan, keto, etc.), and cuisine (korean, italian, etc.)
 - **Demand Intelligence**: View demand signals (HOT/GROWING/STABLE/NICHE) with scores
 - **Content Opportunities**: Discover gaps in the market (quality_gap, freshness_gap, underserved, trending, google_breakout)
@@ -136,7 +137,7 @@ See `SETUP.md` for more details.
 
 ### AI-Powered Extraction
 - **Ingredient Detection**: AI-powered extraction with synonym normalization (100+ canonical forms)
-- **Transcript Support**: Extract ingredients from video transcripts (not just title/description)
+- **Transcript-First Extraction**: Transcripts are the primary source (confidence 0.95), with title/description as supplementary. All batch scripts, live search, and background processing fetch transcripts.
 - **Dynamic Blocklist**: User corrections automatically improve extraction accuracy
 
 ### User Features (Moat)

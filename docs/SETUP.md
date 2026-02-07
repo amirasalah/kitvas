@@ -237,10 +237,11 @@ Once your database is set up:
 
 2. Navigate to http://localhost:3000
 
-3. Enter ingredients in the search box (e.g., "miso", "pasta")
+3. Enter at least 2 ingredients in the search box (e.g., "miso", "pasta")
    - Type ingredients separated by commas (space adds comma automatically)
-   - Press Enter to search
+   - Press Enter to search (requires minimum 2 ingredients)
    - You can add up to 10 ingredients
+   - Only videos matching ALL searched ingredients (100% match) are shown
 
 4. Use tag filters to narrow results by cooking method, dietary info, or cuisine
 
