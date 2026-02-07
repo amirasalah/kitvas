@@ -40,7 +40,7 @@ export function TrendingIngredients({ onIngredientClick }: TrendingIngredientsPr
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-bold text-gray-900">What's Hot</h2>
-              {isConnected && (
+              {isConnected && period === 'today' && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-50 border border-green-200">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
