@@ -76,7 +76,8 @@ model Video {
   id          String   @id @default(cuid())
   youtubeId   String   @unique
   title       String
-  description String?
+  description  String?
+  transcript   String?
   thumbnailUrl String
   publishedAt DateTime
   views          Int?

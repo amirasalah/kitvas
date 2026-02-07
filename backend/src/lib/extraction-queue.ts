@@ -109,6 +109,13 @@ async function processNextVideo(prisma: PrismaClient): Promise<boolean> {
     let transcript: string | null = null;
     try {
       transcript = await fetchTranscript(video.youtubeId);
+      if (transcript) {
+        // Persist transcript to database
+        await prisma.video.update({
+          where: { id: dbVideo.id },
+          data: { transcript },
+        });
+      }
     } catch { /* continue without transcript */ }
 
     // Extract and store ingredients (transcript-first when available)

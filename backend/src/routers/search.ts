@@ -350,6 +350,11 @@ export const searchRouter = t.router({
               transcript = await fetchTranscript(ytVideo.id);
               if (transcript) {
                 console.log(`[Search] Fetched transcript for ${ytVideo.id} (${transcript.length} chars)`);
+                // Persist transcript to database
+                await ctx.prisma.video.update({
+                  where: { id: dbVideo.id },
+                  data: { transcript },
+                });
               }
             } catch {
               // Transcript not available — continue without

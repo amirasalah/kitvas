@@ -133,6 +133,9 @@ async function runTrendsFetch(): Promise<void> {
     console.log(`Errors: ${stats.errors}`);
 
     await logJobComplete(jobId, stats, 'completed');
+
+    // Notify connected SSE clients of new data
+    await triggerBroadcast();
   } catch (error) {
     console.error('\n❌ Fatal error:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -140,6 +143,31 @@ async function runTrendsFetch(): Promise<void> {
     process.exit(1);
   } finally {
     await prisma.$disconnect();
+  }
+}
+
+async function triggerBroadcast(): Promise<void> {
+  const url = process.env.INTERNAL_BROADCAST_URL || 'http://localhost:4001/internal/broadcast-trends';
+  const secret = process.env.INTERNAL_BROADCAST_SECRET;
+  if (!secret) {
+    console.log('\n⚠️  INTERNAL_BROADCAST_SECRET not set — skipping SSE broadcast');
+    return;
+  }
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'X-Internal-Secret': secret },
+    });
+    if (res.ok) {
+      const body = await res.json() as { connections: number };
+      console.log(`📡 SSE broadcast sent to ${body.connections} client(s)`);
+    } else {
+      console.warn(`⚠️  Broadcast failed: ${res.status}`);
+    }
+  } catch {
+    // Server may be down — non-fatal
+    console.warn('⚠️  Could not reach server for SSE broadcast');
   }
 }
 

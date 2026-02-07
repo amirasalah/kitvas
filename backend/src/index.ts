@@ -1,11 +1,14 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { streamSSE } from 'hono/streaming';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from './router.js';
 import { createContext } from './context.js';
 import { startExtractionWorker } from './lib/extraction-queue.js';
 import { initExtractor } from './lib/ingredient-extractor.js';
+import { broadcaster } from './lib/sse-broadcast.js';
+import { queryHotIngredients } from './lib/hot-ingredients-query.js';
 import { PrismaClient } from '@prisma/client';
 
 // Initialize Prisma for extraction worker
@@ -26,7 +29,7 @@ app.use('/*', cors({
     return null;
   },
   allowMethods: ['GET', 'POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'trpc-batch-mode'],
+  allowHeaders: ['Content-Type', 'trpc-batch-mode', 'X-Internal-Secret'],
   exposeHeaders: ['Content-Length'],
   credentials: true,
 }));
@@ -34,6 +37,50 @@ app.use('/*', cors({
 // Health check
 app.get('/health', (c) => {
   return c.json({ status: 'ok' });
+});
+
+// SSE endpoint for real-time trending ingredient updates
+app.get('/sse/trends', (c) => {
+  return streamSSE(c, async (stream) => {
+    const id = crypto.randomUUID();
+    broadcaster.addConnection(id, stream);
+
+    await stream.writeSSE({ event: 'connected', data: JSON.stringify({ id }) });
+
+    // Keepalive every 30s to prevent proxy timeouts
+    const heartbeat = setInterval(async () => {
+      try {
+        await stream.writeSSE({ event: 'heartbeat', data: '' });
+      } catch {
+        clearInterval(heartbeat);
+      }
+    }, 30_000);
+
+    stream.onAbort(() => {
+      clearInterval(heartbeat);
+      broadcaster.removeConnection(id);
+    });
+
+    // Keep stream open until client disconnects
+    await new Promise(() => {});
+  });
+});
+
+// Internal endpoint: triggers SSE broadcast after cron job completes
+app.post('/internal/broadcast-trends', async (c) => {
+  const secret = c.req.header('x-internal-secret');
+  if (!secret || secret !== process.env.INTERNAL_BROADCAST_SECRET) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const [today, week, month] = await Promise.all([
+    queryHotIngredients(prisma, 'today', 10),
+    queryHotIngredients(prisma, 'week', 10),
+    queryHotIngredients(prisma, 'month', 10),
+  ]);
+
+  await broadcaster.broadcast('trends-update', { today, week, month });
+  return c.json({ ok: true, connections: broadcaster.getConnectionCount() });
 });
 
 // tRPC endpoint using fetch adapter (compatible with tRPC v11)

@@ -14,6 +14,7 @@
 
 import { z } from 'zod';
 import { t } from '../trpc.js';
+import { queryHotIngredients } from '../lib/hot-ingredients-query.js';
 
 export const analyticsRouter = t.router({
   /**
@@ -28,93 +29,7 @@ export const analyticsRouter = t.router({
       })
     )
     .query(async ({ input, ctx }) => {
-      const { period, limit } = input;
-
-      // Calculate date range based on period
-      // "today" uses 2 days to ensure we have data even if today's fetch hasn't run yet
-      const dateRange = {
-        today: 2, // Last 48 hours to catch yesterday's data if today's isn't fetched yet
-        week: 7,
-        month: 30,
-      }[period];
-
-      const since = new Date(Date.now() - dateRange * 24 * 60 * 60 * 1000);
-      const previousPeriodStart = new Date(Date.now() - dateRange * 2 * 24 * 60 * 60 * 1000);
-
-      // Get current period data from Google Trends
-      const currentTrends = await ctx.prisma.googleTrend.groupBy({
-        by: ['keyword'],
-        where: { date: { gte: since } },
-        _avg: { interestValue: true },
-        orderBy: { _avg: { interestValue: 'desc' } },
-        take: limit * 2, // Get extra to filter out low interest
-      });
-
-      if (currentTrends.length === 0) {
-        // Fallback to internal search data if no Google Trends data
-        return {
-          period,
-          source: 'internal' as const,
-          ingredients: [],
-          hasGoogleTrends: false,
-        };
-      }
-
-      // Get breakout status for each keyword (can't aggregate boolean in PostgreSQL)
-      const breakoutKeywords = await ctx.prisma.googleTrend.findMany({
-        where: {
-          keyword: { in: currentTrends.map((t) => t.keyword) },
-          date: { gte: since },
-          isBreakout: true,
-        },
-        select: { keyword: true },
-        distinct: ['keyword'],
-      });
-      const breakoutSet = new Set(breakoutKeywords.map((b) => b.keyword));
-
-      // Get previous period data for growth calculation
-      const previousTrends = await ctx.prisma.googleTrend.groupBy({
-        by: ['keyword'],
-        where: {
-          date: { gte: previousPeriodStart, lt: since },
-          keyword: { in: currentTrends.map((t) => t.keyword) },
-        },
-        _avg: { interestValue: true },
-      });
-
-      const previousMap = new Map(previousTrends.map((t) => [t.keyword, t._avg.interestValue || 0]));
-
-      // Build results with growth calculation
-      const results = [];
-
-      for (const trend of currentTrends) {
-        if (results.length >= limit) break;
-
-        const currentAvg = trend._avg.interestValue || 0;
-        if (currentAvg < 10) continue; // Filter out very low interest
-
-        const previousAvg = previousMap.get(trend.keyword) || currentAvg;
-        let growth = 0;
-
-        if (previousAvg > 0) {
-          growth = ((currentAvg - previousAvg) / previousAvg) * 100;
-        }
-
-        results.push({
-          name: trend.keyword,
-          interest: Math.round(currentAvg),
-          growth: Math.round(growth),
-          isBreakout: breakoutSet.has(trend.keyword),
-          rank: results.length + 1,
-        });
-      }
-
-      return {
-        period,
-        source: 'google_trends' as const,
-        ingredients: results,
-        hasGoogleTrends: true,
-      };
+      return queryHotIngredients(ctx.prisma, input.period, input.limit);
     }),
 
   /**

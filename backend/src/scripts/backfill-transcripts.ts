@@ -29,16 +29,10 @@ async function backfillTranscripts(limit: number = 500) {
   // Initialize extractor feedback loop
   initExtractor(prisma);
 
-  // Find videos without transcript-sourced ingredients, ordered by views
+  // Find videos without a stored transcript, ordered by views
   const videos = await prisma.video.findMany({
     where: {
-      NOT: {
-        videoIngredients: {
-          some: {
-            source: 'transcript',
-          },
-        },
-      },
+      transcript: null,
     },
     select: {
       id: true,
@@ -77,6 +71,12 @@ async function backfillTranscripts(limit: number = 500) {
       }
 
       stats.transcriptsFound++;
+
+      // Persist transcript to database
+      await prisma.video.update({
+        where: { id: video.id },
+        data: { transcript },
+      });
 
       // Re-extract ingredients with transcript priority
       const extracted = await extractIngredientsFromVideo(

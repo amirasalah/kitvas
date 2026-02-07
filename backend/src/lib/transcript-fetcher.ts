@@ -1,55 +1,54 @@
 /**
  * YouTube Transcript Fetcher
  *
- * Fetches video transcripts using the youtube-transcript package.
- * This uses an unofficial API that doesn't require OAuth or quota.
+ * Fetches video transcripts using youtube-transcript-plus (Innertube API).
+ * This uses YouTube's internal API — no OAuth or quota needed.
  *
  * Note: Some videos don't have transcripts available (disabled, private, etc.)
  */
 
-import { YoutubeTranscript, type TranscriptResponse } from 'youtube-transcript';
+import { fetchTranscript as ytFetchTranscript } from 'youtube-transcript-plus';
 
 /**
  * Fetch transcript for a YouTube video
- * Returns the full transcript as a single string, or null if not available
+ * Returns the full transcript as a single string, or null if not available.
+ * Prefers English tracks but falls back to any available language.
  *
  * @param videoId YouTube video ID (not full URL)
  * @returns Full transcript text or null
  */
 export async function fetchTranscript(videoId: string): Promise<string | null> {
-  try {
-    const segments: TranscriptResponse[] = await YoutubeTranscript.fetchTranscript(videoId, {
-      lang: 'en', // Prefer English transcripts
-    });
+  // Try English first, then fall back to any available language
+  const langs = ['en', undefined]; // undefined = default/any language
 
-    if (!segments || segments.length === 0) {
-      return null;
+  for (const lang of langs) {
+    try {
+      const segments = await ytFetchTranscript(videoId, lang ? { lang } : undefined);
+
+      if (!segments || segments.length === 0) {
+        continue;
+      }
+
+      const fullText = segments
+        .map((s: { text: string }) => s.text)
+        .join(' ')
+        .replace(/&amp;/g, '&')       // Decode HTML entities (& first since others may be double-encoded)
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\[.*?\]/g, '')     // Remove [Music], [Applause], etc.
+        .replace(/♪[^♪]*♪/g, '')     // Remove music note markers
+        .replace(/\s+/g, ' ')        // Normalize whitespace
+        .trim();
+
+      if (fullText) return fullText;
+    } catch {
+      continue;
     }
-
-    // Join all segments into one text blob
-    // Clean up common transcript artifacts
-    const fullText = segments
-      .map(s => s.text)
-      .join(' ')
-      .replace(/\[.*?\]/g, '') // Remove [Music], [Applause], etc.
-      .replace(/\s+/g, ' ') // Normalize whitespace
-      .trim();
-
-    return fullText || null;
-  } catch (error) {
-    // Many videos don't have transcripts — this is expected, not an error
-    // Only log if it's an unexpected error type
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    // Don't log for expected "not available" errors
-    if (!errorMessage.includes('disabled') &&
-        !errorMessage.includes('not available') &&
-        !errorMessage.includes('unavailable')) {
-      console.warn(`[Transcript] Error fetching ${videoId}: ${errorMessage}`);
-    }
-
-    return null;
   }
+
+  return null;
 }
 
 /**

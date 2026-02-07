@@ -169,6 +169,11 @@ async function runDailyBatchJob() {
               transcript = await fetchTranscript(youtubeId);
               if (transcript) {
                 console.log(`   📝 Transcript fetched (${transcript.length} chars)`);
+                // Persist transcript to database
+                await prisma.video.update({
+                  where: { id: storedVideo.id },
+                  data: { transcript },
+                });
               }
             } catch { /* continue without transcript */ }
 

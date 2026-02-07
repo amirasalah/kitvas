@@ -38,6 +38,13 @@ export async function processBackgroundVideos(
       let transcript: string | null = null;
       try {
         transcript = await fetchTranscript(ytVideo.id);
+        if (transcript) {
+          // Persist transcript to database
+          await prisma.video.update({
+            where: { id: dbVideo.id },
+            data: { transcript },
+          });
+        }
       } catch {
         // Transcript not available — continue without
       }

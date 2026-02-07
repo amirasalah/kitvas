@@ -133,6 +133,13 @@ async function ingestVideos(options: IngestionOptions) {
           let transcript: string | null = null;
           try {
             transcript = await fetchTranscript(youtubeId);
+            if (transcript) {
+              // Persist transcript to database
+              await prisma.video.update({
+                where: { id: storedVideo.id },
+                data: { transcript },
+              });
+            }
           } catch { /* continue without transcript */ }
 
           // Extract ingredients (transcript-first when available)
