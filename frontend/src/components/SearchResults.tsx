@@ -274,17 +274,22 @@ export function SearchResults({
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {youtubeVideos.map((video) => (
+            {(isLoggedIn ? youtubeVideos : youtubeVideos.slice(0, 3)).map((video) => (
               <YouTubeVideoCard key={video.youtubeId} video={video} />
             ))}
           </div>
+          {!isLoggedIn && youtubeVideos.length > 3 && (
+            <VideoSignInPrompt hiddenCount={youtubeVideos.length - 3} />
+          )}
         </section>
       )}
 
       {/* Analyzed Videos */}
       {analyzedVideos.length > 0 && (
         <AnalyzedVideosSection
-          videos={analyzedVideos}
+          videos={isLoggedIn ? analyzedVideos : analyzedVideos.slice(0, 3)}
+          showSignIn={!isLoggedIn && analyzedVideos.length > 3}
+          hiddenCount={analyzedVideos.length - 3}
         />
       )}
     </div>
@@ -646,10 +651,30 @@ function IngredientTag({
 
 type SortOption = 'relevance' | 'views' | 'newest'
 
+function VideoSignInPrompt({ hiddenCount }: { hiddenCount: number }) {
+  return (
+    <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl text-center">
+      <p className="text-sm text-gray-600 mb-2">
+        +{hiddenCount} more {hiddenCount === 1 ? 'video' : 'videos'} available
+      </p>
+      <Link
+        href="/auth/signin"
+        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#10B981] hover:bg-[#059669] rounded-lg transition-colors"
+      >
+        Sign in to see all results
+      </Link>
+    </div>
+  )
+}
+
 function AnalyzedVideosSection({
   videos,
+  showSignIn,
+  hiddenCount,
 }: {
   videos: VideoResult[]
+  showSignIn?: boolean
+  hiddenCount?: number
 }) {
   const [sortBy, setSortBy] = useState<SortOption>('relevance')
 
@@ -705,6 +730,9 @@ function AnalyzedVideosSection({
           <VideoCard key={video.id} video={video} />
         ))}
       </div>
+      {showSignIn && hiddenCount && hiddenCount > 0 && (
+        <VideoSignInPrompt hiddenCount={hiddenCount} />
+      )}
     </section>
   )
 }
