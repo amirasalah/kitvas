@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { trpc } from '@/app/providers'
+import { useTrendingSSE } from '@/hooks/useTrendingSSE'
 
 type Period = 'today' | 'week' | 'month'
 
@@ -10,6 +11,7 @@ interface TrendingIngredientsProps {
 }
 
 export function TrendingIngredients({ onIngredientClick }: TrendingIngredientsProps) {
+  const { isConnected } = useTrendingSSE()
   const [period, setPeriod] = useState<Period>('week')
 
   const { data, isLoading, error } = trpc.analytics.hotIngredients.useQuery(
@@ -36,7 +38,18 @@ export function TrendingIngredients({ onIngredientClick }: TrendingIngredientsPr
             <span className="text-xl">🔥</span>
           </div>
           <div>
-            <h2 className="font-bold text-gray-900">What's Hot</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-bold text-gray-900">What's Hot</h2>
+              {isConnected && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-50 border border-green-200">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  <span className="text-[10px] font-semibold text-green-700 uppercase tracking-wide">Live</span>
+                </span>
+              )}
+            </div>
             <p className="text-sm text-gray-500">Trending ingredients on Google</p>
           </div>
         </div>
@@ -111,7 +124,7 @@ export function TrendingIngredients({ onIngredientClick }: TrendingIngredientsPr
 
       {/* Footer */}
       <p className="text-xs text-gray-400 mt-4 text-center">
-        Data from Google Trends • Updated daily
+        Data from Google Trends • Live updates
       </p>
     </div>
   )
