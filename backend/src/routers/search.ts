@@ -9,6 +9,7 @@ import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/i
 import { extractTagsFromVideo, storeExtractedTags } from '../lib/tag-extractor.js';
 import { processBackgroundVideos } from '../lib/background-processor.js';
 import { fetchTranscript } from '../lib/transcript-fetcher.js';
+import { detectAndTranslate } from '../lib/translator.js';
 import { getTrendsBoost } from '../lib/google-trends/fetcher.js';
 import { normalizeIngredient, getSynonymMatches, getSynonyms } from '../lib/ingredient-synonyms.js';
 
@@ -286,15 +287,16 @@ export const searchRouter = t.router({
           };
         });
 
-        // Strict 100% match: ALL searched ingredients must be in the video
+        // Minimum 50% match: at least half the searched ingredients must be in the video
         const filteredVideos = analyzedVideosUnfiltered.filter(
-          (video) => video.relevanceScore === 1.0
+          (video) => video.relevanceScore >= 0.5
         );
 
-        // Sort: videos with view data first, then by weighted score
+        // Sort: relevance first, then views, then weighted score
         let analyzedVideos = filteredVideos
           .map(({ matchingCount, ...video }) => video)
           .sort((a, b) => {
+            if (a.relevanceScore !== b.relevanceScore) return b.relevanceScore - a.relevanceScore;
             const aHasViews = a.views != null && a.views > 0 ? 1 : 0;
             const bHasViews = b.views != null && b.views > 0 ? 1 : 0;
             if (aHasViews !== bHasViews) return bHasViews - aHasViews;
@@ -325,7 +327,7 @@ export const searchRouter = t.router({
         // This enables the correction system immediately for new videos
         const freshAnalyzedVideos: typeof analyzedVideos = [];
 
-        for (const ytVideo of freshYoutubeVideosRaw.slice(0, 10)) {
+        for (const ytVideo of freshYoutubeVideosRaw.slice(0, 20)) {
           try {
             // Create video record in database
             const dbVideo = await ctx.prisma.video.upsert({
@@ -346,25 +348,33 @@ export const searchRouter = t.router({
 
             // Try to fetch transcript for better ingredient detection
             let transcript: string | null = null;
+            let extractionTranscript: string | null = null;
             try {
               transcript = await fetchTranscript(ytVideo.id);
               if (transcript) {
                 console.log(`[Search] Fetched transcript for ${ytVideo.id} (${transcript.length} chars)`);
-                // Persist transcript to database
+                // Detect language and translate if needed
+                const { translatedText, originalLanguage, wasTranslated } = await detectAndTranslate(transcript);
+                extractionTranscript = wasTranslated ? translatedText : transcript;
+                // Persist transcript + translation to database
                 await ctx.prisma.video.update({
                   where: { id: dbVideo.id },
-                  data: { transcript },
+                  data: {
+                    transcript,
+                    transcriptLanguage: originalLanguage,
+                    transcriptEnglish: wasTranslated ? translatedText : null,
+                  },
                 });
               }
             } catch {
               // Transcript not available — continue without
             }
 
-            // Extract ingredients using LLM/keywords (and transcript if available)
+            // Extract ingredients using LLM/keywords (and English transcript if available)
             const extractedIngredients = await extractIngredientsFromVideo(
               ytVideo.snippet.title,
               ytVideo.snippet.description || null,
-              transcript
+              extractionTranscript || transcript
             );
 
             // Store ingredients in database (enables corrections)
@@ -467,9 +477,9 @@ export const searchRouter = t.router({
           }
         }
 
-        // Filter fresh videos: strict 100% match only
+        // Filter fresh videos: minimum 50% match
         let filteredFreshVideos = freshAnalyzedVideos.filter(
-          video => video.relevanceScore === 1.0
+          video => video.relevanceScore >= 0.5
         );
 
         if (normalizedTags.length > 0) {
@@ -478,23 +488,34 @@ export const searchRouter = t.router({
           );
         }
 
-        // Merge fresh analyzed videos with existing, sort (view data first), cap at 24
+        // Merge fresh analyzed videos with existing, sort by relevance then views, cap at 50
         const mergedVideos = [...filteredFreshVideos, ...analyzedVideos];
         mergedVideos.sort((a, b) => {
+          if (a.relevanceScore !== b.relevanceScore) return b.relevanceScore - a.relevanceScore;
           const aHasViews = a.views != null && a.views > 0 ? 1 : 0;
           const bHasViews = b.views != null && b.views > 0 ? 1 : 0;
           if (aHasViews !== bHasViews) return bHasViews - aHasViews;
           return b.sortScore - a.sortScore;
         });
-        const allAnalyzedVideos = mergedVideos.slice(0, 24).map(({ sortScore, ...video }) => video);
+        const allAnalyzedVideos = mergedVideos.slice(0, 50).map(({ sortScore, ...video }) => video);
 
         // Process remaining fresh videos in background (fire-and-forget)
-        const remainingVideos = freshYoutubeVideosRaw.slice(10);
+        const remainingVideos = freshYoutubeVideosRaw.slice(20);
         if (remainingVideos.length > 0) {
           processBackgroundVideos(ctx.prisma, remainingVideos).catch((err: unknown) =>
             console.error('[Search] Background video processing error:', err)
           );
         }
+
+        // Build unanalyzed YouTube video list for "Fresh from YouTube" section
+        const unanalyzedYoutubeVideos = remainingVideos.map(ytVideo => ({
+          youtubeId: ytVideo.id,
+          title: ytVideo.snippet.title,
+          description: ytVideo.snippet.description || null,
+          thumbnailUrl: ytVideo.snippet.thumbnails.high?.url || ytVideo.snippet.thumbnails.medium?.url || ytVideo.snippet.thumbnails.default.url,
+          publishedAt: ytVideo.snippet.publishedAt,
+          views: ytVideo.statistics?.viewCount ? parseInt(ytVideo.statistics.viewCount, 10) : null,
+        }));
 
         // Fetch Google Trends boost for enhanced demand scoring
         const trendsBoost = await getTrendsBoost(ctx.prisma, normalizedIngredients);
@@ -571,19 +592,12 @@ export const searchRouter = t.router({
         return {
           // All analyzed videos (database + freshly extracted from YouTube)
           analyzedVideos: allAnalyzedVideos,
-          // Empty - all YouTube videos are now analyzed inline
-          youtubeVideos: [] as Array<{
-            youtubeId: string;
-            title: string;
-            description: string | null;
-            thumbnailUrl: string;
-            publishedAt: string;
-            views: number | null;
-          }>,
+          // Unanalyzed YouTube videos for "Fresh from YouTube" section
+          youtubeVideos: unanalyzedYoutubeVideos,
           // Rate limit info
           rateLimitRemaining,
-          // No partial matches — strict 100% match enforced
-          lowRelevanceFallback: false,
+          // Whether partial matches are included in results
+          lowRelevanceFallback: allAnalyzedVideos.some(v => v.relevanceScore < 1.0),
           // Legacy field for backward compatibility
           videos: allAnalyzedVideos,
           // YouTube market-based demand signals
@@ -606,5 +620,56 @@ export const searchRouter = t.router({
           message: 'Failed to perform search',
         });
       }
+    }),
+
+  getTranscript: t.procedure
+    .input(z.object({ videoId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const video = await ctx.prisma.video.findUnique({
+        where: { id: input.videoId },
+        select: {
+          transcript: true,
+          transcriptLanguage: true,
+          transcriptEnglish: true,
+        },
+      });
+      if (!video?.transcript) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Transcript not available' });
+      }
+      return video;
+    }),
+
+  translateTranscript: t.procedure
+    .input(z.object({ videoId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const video = await ctx.prisma.video.findUnique({
+        where: { id: input.videoId },
+        select: {
+          transcript: true,
+          transcriptLanguage: true,
+          transcriptEnglish: true,
+        },
+      });
+      if (!video?.transcript) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Transcript not available' });
+      }
+      // Return cached translation if available
+      if (video.transcriptEnglish) {
+        return { transcriptEnglish: video.transcriptEnglish, language: video.transcriptLanguage };
+      }
+      const { translatedText, originalLanguage, wasTranslated } = await detectAndTranslate(video.transcript);
+      if (wasTranslated) {
+        await ctx.prisma.video.update({
+          where: { id: input.videoId },
+          data: {
+            transcriptEnglish: translatedText,
+            transcriptLanguage: originalLanguage,
+          },
+        });
+      }
+      return {
+        transcriptEnglish: wasTranslated ? translatedText : video.transcript,
+        language: originalLanguage,
+      };
     }),
 });

@@ -9,6 +9,7 @@ import type { YouTubeVideo } from './youtube.js';
 import { processVideoIngredients } from './ingredient-extractor.js';
 import { getVideoDetails } from './youtube.js';
 import { fetchTranscript } from './transcript-fetcher.js';
+import { detectAndTranslate } from './translator.js';
 
 interface QueuedVideo {
   youtubeId: string;
@@ -107,13 +108,19 @@ async function processNextVideo(prisma: PrismaClient): Promise<boolean> {
 
     // Fetch transcript for better ingredient extraction
     let transcript: string | null = null;
+    let extractionTranscript: string | null = null;
     try {
       transcript = await fetchTranscript(video.youtubeId);
       if (transcript) {
-        // Persist transcript to database
+        const { translatedText, originalLanguage, wasTranslated } = await detectAndTranslate(transcript);
+        extractionTranscript = wasTranslated ? translatedText : transcript;
         await prisma.video.update({
           where: { id: dbVideo.id },
-          data: { transcript },
+          data: {
+            transcript,
+            transcriptLanguage: originalLanguage,
+            transcriptEnglish: wasTranslated ? translatedText : null,
+          },
         });
       }
     } catch { /* continue without transcript */ }
@@ -124,7 +131,7 @@ async function processNextVideo(prisma: PrismaClient): Promise<boolean> {
       dbVideo.id,
       video.title,
       video.description,
-      transcript
+      extractionTranscript || transcript
     );
 
     console.log(`[Queue] Processed ${video.youtubeId}: "${video.title.slice(0, 50)}..." - ${ingredientCount} ingredients`);

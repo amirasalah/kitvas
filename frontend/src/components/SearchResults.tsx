@@ -515,6 +515,9 @@ function VideoCard({ video }: { video: VideoResult }) {
           </div>
         )}
 
+        {/* Transcript */}
+        <TranscriptButton videoId={video.id} />
+
         {/* Tags */}
         {video.tags && video.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-gray-100">
@@ -685,8 +688,9 @@ function AnalyzedVideosSection({
     if (sortBy === 'newest') {
       return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
     }
-    // 'relevance' — keep original order (already sorted by backend)
-    return 0
+    // 'relevance' — sort by match percentage descending, then views
+    if (a.relevanceScore !== b.relevanceScore) return b.relevanceScore - a.relevanceScore
+    return (b.views ?? 0) - (a.views ?? 0)
   })
 
   const sortOptions: { value: SortOption; label: string }[] = [
@@ -734,6 +738,126 @@ function AnalyzedVideosSection({
         <VideoSignInPrompt hiddenCount={hiddenCount} />
       )}
     </section>
+  )
+}
+
+function TranscriptButton({ videoId }: { videoId: string }) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#10B981] transition-colors"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        {isOpen ? 'Hide Transcript' : 'View Transcript'}
+        <svg className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isOpen && <TranscriptPanel videoId={videoId} />}
+    </div>
+  )
+}
+
+function TranscriptPanel({ videoId }: { videoId: string }) {
+  const [showTranslation, setShowTranslation] = useState(false)
+
+  const transcriptQuery = trpc.search.getTranscript.useQuery(
+    { videoId },
+    { staleTime: Infinity }
+  )
+
+  const translateMutation = trpc.search.translateTranscript.useMutation({
+    onSuccess: () => {
+      transcriptQuery.refetch()
+    },
+  })
+
+  if (transcriptQuery.isLoading) {
+    return (
+      <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+        <div className="w-3 h-3 rounded-full border-2 border-gray-200 border-t-gray-500 animate-spin" />
+        Loading transcript...
+      </div>
+    )
+  }
+
+  if (transcriptQuery.error) {
+    return (
+      <div className="mt-3 text-xs text-gray-400">
+        Transcript not available for this video
+      </div>
+    )
+  }
+
+  const data = transcriptQuery.data
+  if (!data) return null
+
+  const isEnglish = data.transcriptLanguage === 'en'
+  const hasTranslation = !!data.transcriptEnglish
+  const displayText = showTranslation && hasTranslation ? data.transcriptEnglish! : data.transcript
+
+  const languageLabel = data.transcriptLanguage
+    ? data.transcriptLanguage.toUpperCase()
+    : 'Unknown'
+
+  return (
+    <div className="mt-3 space-y-2">
+      {/* Header with language badge and translation controls */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">
+          {languageLabel}
+        </span>
+        {!isEnglish && (
+          <>
+            {hasTranslation ? (
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => setShowTranslation(false)}
+                  className={`text-xs px-2.5 py-1 rounded-md transition-colors ${
+                    !showTranslation ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500'
+                  }`}
+                >
+                  Original
+                </button>
+                <button
+                  onClick={() => setShowTranslation(true)}
+                  className={`text-xs px-2.5 py-1 rounded-md transition-colors ${
+                    showTranslation ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500'
+                  }`}
+                >
+                  English
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => translateMutation.mutate({ videoId })}
+                disabled={translateMutation.isPending}
+                className="text-xs px-3 py-1 bg-[#10B981] text-white rounded-lg hover:bg-[#059669] transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {translateMutation.isPending ? (
+                  <>
+                    <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    Translating...
+                  </>
+                ) : (
+                  'Translate to English'
+                )}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Transcript text */}
+      <div className="max-h-60 overflow-y-auto text-xs text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-3 whitespace-pre-wrap">
+        {displayText}
+      </div>
+    </div>
   )
 }
 

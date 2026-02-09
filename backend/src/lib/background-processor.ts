@@ -11,6 +11,7 @@ import type { YouTubeVideo } from './youtube.js';
 import { extractIngredientsFromVideo, storeExtractedIngredients } from './ingredient-extractor.js';
 import { extractTagsFromVideo, storeExtractedTags } from './tag-extractor.js';
 import { fetchTranscript } from './transcript-fetcher.js';
+import { detectAndTranslate } from './translator.js';
 
 export async function processBackgroundVideos(
   prisma: PrismaClient,
@@ -36,13 +37,19 @@ export async function processBackgroundVideos(
 
       // Try to fetch transcript for better ingredient detection
       let transcript: string | null = null;
+      let extractionTranscript: string | null = null;
       try {
         transcript = await fetchTranscript(ytVideo.id);
         if (transcript) {
-          // Persist transcript to database
+          const { translatedText, originalLanguage, wasTranslated } = await detectAndTranslate(transcript);
+          extractionTranscript = wasTranslated ? translatedText : transcript;
           await prisma.video.update({
             where: { id: dbVideo.id },
-            data: { transcript },
+            data: {
+              transcript,
+              transcriptLanguage: originalLanguage,
+              transcriptEnglish: wasTranslated ? translatedText : null,
+            },
           });
         }
       } catch {
@@ -52,7 +59,7 @@ export async function processBackgroundVideos(
       const extractedIngredients = await extractIngredientsFromVideo(
         ytVideo.snippet.title,
         ytVideo.snippet.description || null,
-        transcript
+        extractionTranscript || transcript
       );
 
       if (extractedIngredients.length > 0) {
