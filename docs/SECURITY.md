@@ -55,15 +55,11 @@ Kitvas uses **NextAuth v5 (beta.30)** with Google OAuth for authentication. The 
 
 ### Procedure Authorization
 
-| Procedure Type | Access Level | Usage |
-|---------------|-------------|-------|
-| `t.procedure` (public) | Anyone | Search, autocomplete, analytics, gaps, community stats |
-| `protectedProcedure` | Authenticated users | Opportunities, outcomes, user correction stats |
-| `adminProcedure` | Admin email allowlist | All admin endpoints (labeling, export, stats) |
+All current tRPC procedures are public (no auth required). The auth infrastructure (`protectedProcedure`, `adminProcedure`) exists in `backend/src/trpc.ts` for future use when Pro tier features are added.
 
-### Admin Access
-
-Admin access is controlled by an email allowlist in `backend/src/trpc.ts`. Currently hardcoded — planned migration to database-driven roles in V1.1.
+| Procedure Type | Access Level | Current Usage |
+|---------------|-------------|---------------|
+| `t.procedure` (public) | Anyone | All current endpoints: search, autocomplete, analytics, gaps |
 
 ## Security Best Practices
 
@@ -73,7 +69,7 @@ Admin access is controlled by an email allowlist in `backend/src/trpc.ts`. Curre
 4. **API Keys**: Rotate keys periodically
 5. **AUTH_SECRET**: Must be kept secret — it can decrypt all session tokens
 6. **Google OAuth**: Ensure redirect URIs are restricted to your domains only
-7. **Monitoring**: Set up Sentry for error tracking (Week 9)
+7. **Monitoring**: Set up Sentry for error tracking
 
 ## Reporting Security Issues
 

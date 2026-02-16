@@ -2,24 +2,23 @@
 
 **Intelligence platform for food content creators.**
 
-Kitvas helps recipe video creators discover content opportunities, understand market demand, and find underserved ingredient combinations that YouTube can't show you.
+Kitvas helps recipe video creators understand market demand, discover underserved ingredient combinations, and find content gaps that YouTube can't show you.
 
 ## What Makes Kitvas Different
 
 While YouTube shows you what already exists, Kitvas shows you what's **missing**:
 
 - **Demand Signals**: See actual view counts, market saturation, and content gaps for any ingredient combination
-- **Content Opportunities**: Discover ingredient combinations with high search demand but low video supply
 - **Ingredient Gap Finder**: "Others searched lamb + rice + sumac (47 searches, only 2 videos)" — that's your opportunity
 - **Google Trends Integration**: External validation of trending ingredients with breakout detection
 
-### The Moat
+### Data Moat
 
 Kitvas builds proprietary data assets that compound over time:
 
 1. **Search Patterns**: Aggregated search behavior reveals what creators want to make
-2. **User Corrections**: Crowdsourced ingredient corrections improve AI accuracy
-3. **Outcome Tracking**: Real performance data calibrates opportunity predictions
+2. **Ingredient Intelligence**: AI-extracted ingredient data across thousands of videos
+3. **Trend Correlation**: Google Trends + YouTube metrics combined for validated demand signals
 
 ## Project Structure
 
@@ -34,9 +33,8 @@ This is a monorepo containing:
 ### Prerequisites
 
 - Node.js 20+
-- npm or yarn
+- npm
 - PostgreSQL database (Supabase)
-- Redis (Upstash for production)
 
 ### Installation
 
@@ -72,7 +70,7 @@ See `SETUP.md` for detailed environment variable setup.
    NEXT_PUBLIC_API_URL="http://localhost:4001"
    AUTH_SECRET="your-auth-secret"
    GOOGLE_CLIENT_ID="your-google-client-id"
-   GOOGLE_CLIENT_SECRET="your-google-client-secret"
+   GOOGLE_CLIENT_SECRET="GOCSPX-your-secret"
    ```
 
 ### Database Setup
@@ -123,50 +121,35 @@ See `SETUP.md` for more details.
 - **Backend**: Hono, tRPC, Prisma, PostgreSQL, jose (JWT verification)
 - **AI**: Groq (Llama 3.3 70B) for ingredient extraction
 - **Auth**: NextAuth v5 (beta.30) with JWE tokens, decrypted on backend via jose
-- **Infrastructure**: Railway, Supabase, Upstash Redis
+- **Infrastructure**: Railway, Supabase
 
-## Features (V1)
+## Features
 
 ### Core Search & Discovery
-- **Ingredient-based Search**: Search by 2+ ingredients with strict 100% match — all searched ingredients must be present in a video
-- **Title + Ingredient Matching**: Matches both extracted ingredients and dish names in video titles (e.g., "kofte" matches via synonym expansion)
+- **Ingredient-based Search**: Search by 2+ ingredients — all searched ingredients must be present in a video
+- **Title + Ingredient Matching**: Matches both extracted ingredients and dish names in video titles via synonym expansion
 - **Tag Filtering**: Filter by cooking method (air fryer, oven, etc.), dietary (vegan, keto, etc.), and cuisine (korean, italian, etc.)
 - **Demand Intelligence**: View demand signals (HOT/GROWING/STABLE/NICHE) with scores
-- **Content Opportunities**: Discover gaps in the market (quality_gap, freshness_gap, underserved, trending, google_breakout)
+- **Content Gap Analysis**: Discover market conditions — underserved, saturated, balanced, or emerging
 - **Hot Ingredients**: Browse trending ingredients by time period (today/week/month) with growth indicators
 
 ### AI-Powered Extraction
 - **Ingredient Detection**: AI-powered extraction with synonym normalization (100+ canonical forms)
-- **Transcript-First Extraction**: Transcripts are the primary source (confidence 0.95), with title/description as supplementary. All batch scripts, live search, and background processing fetch transcripts.
-- **Dynamic Blocklist**: User corrections automatically improve extraction accuracy
+- **Transcript-First Extraction**: Transcripts are the primary source (confidence 0.95), with title/description supplementary
+- **Tag Detection**: Automatic cooking method, dietary, and cuisine tag classification
 
-### User Features (Moat)
-- **Ingredient Gap Finder**: Shows underserved ingredient combinations based on aggregated search patterns — what YouTube can't show
-- **Correction System**: Click ingredients to correct detection errors, improving AI accuracy for everyone
-- **Opportunity Tracking**: Track and manage content ideas through your pipeline
-- **Outcome Reporting**: Report video performance to calibrate prediction accuracy
+### Intelligence Features
+- **Ingredient Gap Finder**: Shows underserved ingredient combinations based on aggregated search patterns
+- **Content Angles**: Related trending queries surfaced as content angle suggestions
+- **Analytics API**: Trending ingredients, seasonal patterns, content gaps, co-occurrence data
 
 ### Authentication
-
 - **Google OAuth**: Sign in with Google via NextAuth v5
 - **JWT Verification**: Backend decrypts NextAuth JWE tokens using jose library
-- **Protected Routes**: Opportunities, outcomes, user stats require authentication
-- **Admin Access**: Admin endpoints restricted by email allowlist
+- **Guest Access**: Core search and analytics available without login; advanced features gated behind sign-in
 
 ### Google Trends Integration
-
 - **External Validation**: Google Trends data validates internal demand signals
-- **Breakout Detection**: Identifies ingredients with >5000% growth (immediate opportunities)
+- **Breakout Detection**: Identifies ingredients with >5000% growth
 - **Rising Queries**: Discover related trending queries for content angle ideas
-- **Enhanced Confidence**: Demand scores boosted when internal + external signals align
 - **Automated Fetching**: Hourly cron job fetches trends for top ingredients (worldwide region)
-
-### ML Training & Analytics
-- **Analytics API**: Trending ingredients, seasonal patterns, content gaps, co-occurrence
-- **Extraction Feedback Loop**: Corrections aggregate into blocklist/allowlist patterns
-- **Opportunity Calibration**: Predictions improve from actual outcome data
-- **Accuracy Tracking**: Historical precision/recall/F1 snapshots
-
-### Admin Tools
-- **Admin Labeling**: Label and export training data for model improvement (`/admin/label`)
-- **Dataset Export**: JSON/CSV export with train/validation/test splits

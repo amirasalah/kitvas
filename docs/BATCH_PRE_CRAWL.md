@@ -39,12 +39,6 @@ This approach ensures fast search responses and enables ingredient-level intelli
 │  3:00 AM Sunday - View Count Refresh                          │
 │     └─ Refresh YouTube view counts for existing videos      │
 │                                                              │
-│  4:00 AM Monday - Corrections Aggregation                     │
-│     └─ Aggregate ML corrections from user feedback          │
-│                                                              │
-│  5:00 AM Tuesday - Opportunity Calibration                    │
-│     └─ Calibrate opportunity scoring thresholds             │
-│                                                              │
 │  6:00 AM Wednesday - Wikidata Ingredients                     │
 │     └─ Fetch new ingredients from Wikidata                  │
 │                                                              │
@@ -112,8 +106,6 @@ pm2 start ecosystem.config.cjs
 | Trends Aggregation | 12:10 AM | Aggregate trends data into demand signals |
 | Daily Batch Job | 2:00 AM | Ingest new YouTube videos |
 | View Count Refresh | 3:00 AM (Sunday) | Refresh YouTube view counts |
-| Corrections Aggregation | 4:00 AM (Monday) | Aggregate ML corrections from user feedback |
-| Opportunity Calibration | 5:00 AM (Tuesday) | Calibrate opportunity scoring thresholds |
 | Wikidata Ingredients | 6:00 AM (Wednesday) | Fetch new ingredients from Wikidata |
 
 All jobs are defined in `backend/src/cron/config.ts`.

@@ -137,8 +137,7 @@ model VideoIngredient {
   ingredientId   String
   confidence     Float    // 0-1
   source         String   // 'title' | 'description' | 'transcript'
-  correctionsCount Int    @default(0)
-  
+
   video       Video      @relation(fields: [videoId], references: [id], onDelete: Cascade)
   ingredient  Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
   

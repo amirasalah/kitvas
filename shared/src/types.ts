@@ -28,7 +28,6 @@ export const VideoIngredientSchema = z.object({
   ingredientId: z.string(),
   confidence: z.number().min(0).max(1),
   source: z.enum(['title', 'description', 'transcript']),
-  correctionsCount: z.number().default(0),
 });
 
 export type VideoIngredient = z.infer<typeof VideoIngredientSchema>;

@@ -147,7 +147,7 @@ A comprehensive catalog of current constraints, technical debt, and areas for im
 | Constraint | Detail |
 |---|---|
 | Guest video limit | 3 analyzed videos visible without login |
-| Guest feature gating | Demand details, opportunities, gaps, content angles, transcripts blurred/hidden |
+| Guest feature gating | Demand details, gaps, content angles, transcripts blurred/hidden |
 | Search limit (guest) | 2 searches before sign-in prompt |
 | No search history | Searches not saved or retrievable |
 | No saved combinations | Can't bookmark ingredient combinations for tracking |
@@ -164,12 +164,10 @@ A comprehensive catalog of current constraints, technical debt, and areas for im
 | Constraint | Detail |
 |---|---|
 | Rate limits | In-memory — reset on server restart |
-| Admin access | Single hardcoded email — can't add admins without code change |
 | Cron jobs | Sequential execution — jobs can't run in parallel |
 | Job recovery | No automatic retry on failure; no alerting |
 | Job timeout | 30 minutes default — may be insufficient for large batch operations |
 | View refresh | Weekly only (Sundays 3am UTC) |
-| Opportunity calibration | Weekly (Tuesdays) — not responsive to rapid market changes |
 | Database | No expiry mechanism for deleted/private YouTube videos |
 | Auth | Google OAuth only — no email/password or other providers |
 

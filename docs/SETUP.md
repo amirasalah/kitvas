@@ -98,40 +98,29 @@ kitvas/
 
 ## Current Status
 
-✅ **Weeks 1-7+ Completed:**
-- Project structure set up (monorepo with frontend, backend, shared)
+✅ **Shipped:**
+- Project structure (monorepo with frontend, backend, shared)
 - Next.js 14 frontend with App Router
-- Hono backend with tRPC
-- Prisma schema with all core tables
-- YouTube API integration
+- Hono backend with tRPC (3 routers: search, analytics, gaps)
+- Prisma schema with 16 models
+- YouTube API integration with inline extraction
 - Ingredient extraction (Groq LLM + keyword fallback)
 - Ingredient synonym mapping & normalization (100+ canonical forms)
 - Tag detection system (cooking methods, dietary, cuisine)
 - Tag filtering in search UI
-- Accuracy measurement script (`npm run accuracy`)
-- Search UI with ingredient input
-- Demand intelligence system (HOT/GROWING/STABLE/NICHE)
-- Content opportunity detection
-- Correction system (users can fix ingredient detection - moat feature)
-- Opportunity tracking (track and manage content ideas - moat feature)
-- Outcome reporting (report video performance - moat feature)
-- Admin labeling tool for training data collection (`/admin/label`)
-- Dataset export (JSON/CSV) with train/validation/test splits (`/admin/label/export`)
-- **Google Trends integration** (external demand validation)
-- **Automated cron job scheduler** (node-cron + PM2)
-- **Hot Ingredients UI** (trending ingredients display)
-
-✅ **Week 8 (Partial):**
-- Authentication implemented (NextAuth v5 + Google OAuth)
-- Backend JWT verification via jose library
-- Protected/admin tRPC procedures
-- Auth token bridging (frontend cookie → backend Authorization header)
+- Search UI with ingredient input and demand intelligence
+- Content gap analysis (underserved/saturated/balanced/emerging)
+- Ingredient gap finder (aggregated search pattern analysis)
+- Google Trends integration (external demand validation, hourly fetch)
+- Automated cron job scheduler (node-cron + PM2)
+- Hot Ingredients UI (trending ingredients display)
+- Authentication (NextAuth v5 + Google OAuth, JWE token verification)
+- Guest/signed-in feature gating
 
 📋 **Remaining:**
-- Integrate Stripe for subscriptions
-- Enforce feature limits by tier (search rate limiting)
-- Analytics dashboard frontend page
-- User profile/stats page
+- Stripe integration for subscriptions
+- Pro tier feature enforcement
+- Production deployment
 
 ## 5. Ingest Videos from YouTube
 
@@ -192,8 +181,6 @@ pm2 stop all
 | Daily Batch Job | 2:00 AM | Ingest new YouTube videos |
 | Trends Aggregation | 12:10 AM | Aggregate search trends |
 | View Count Refresh | 3:00 AM Sunday | Refresh YouTube view counts |
-| Corrections Aggregation | 4:00 AM Monday | Aggregate ML corrections |
-| Opportunity Calibration | 5:00 AM Tuesday | Calibrate opportunity scoring |
 | Wikidata Ingredients | 6:00 AM Wednesday | Fetch ingredients from Wikidata |
 
 ### Manual Execution
@@ -253,7 +240,7 @@ Once your database is set up:
 
 6. Click on any ingredient tag to correct detection errors (moat feature)
 
-7. Visit `/opportunities` to track and manage your content ideas
+7. View ingredient gaps and content angles for deeper market insights
 
 ## Troubleshooting
 
