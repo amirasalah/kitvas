@@ -7,19 +7,8 @@
  * Strategy:
  * 1. Use Groq LLM for intelligent ingredient extraction (primary)
  * 2. Fall back to keyword-based extraction if API fails
- * 3. Normalize ingredient names using synonym mapping (Week 5)
+ * 3. Normalize ingredient names using synonym mapping
  * 4. Store with confidence scores
- * 5. Dynamic blocklist from user corrections (ML feedback loop)
- *
- * Week 5 improvements:
- * - Enhanced LLM prompt with stricter instructions and examples
- * - Synonym-aware normalization (e.g., "tomatoes" -> "tomato")
- * - Deduplication after normalization
- *
- * ML Training improvements:
- * - Dynamic blocklist populated from ExtractionFeedback (false positives)
- * - Dynamic allowlist for commonly missed ingredients (false negatives)
- * - Rename mappings from user corrections
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -95,86 +84,11 @@ const STATIC_BLOCKLIST = new Set([
   'sprinkle', 'sprinkles', 'drizzle', 'drizzles', 'garnish', 'garnishes',
 ]);
 
-// ============================================================================
-// Dynamic Blocklist/Allowlist from User Corrections
-// ============================================================================
-
-// Items that should NOT be extracted (frequently marked "wrong" by users)
-const dynamicBlocklist = new Set<string>();
-
-// Items that should definitely be extracted (frequently added by users)
-const dynamicAllowlist = new Set<string>();
-
-// Rename mappings from user corrections
-const dynamicRenames = new Map<string, string>();
-
-// Last time the lists were refreshed
-let lastFeedbackRefresh: Date | null = null;
-const FEEDBACK_REFRESH_INTERVAL = 60 * 60 * 1000; // 1 hour
-
-/**
- * Refresh dynamic blocklist/allowlist from ExtractionFeedback table
- * Called periodically to incorporate user corrections into extraction
- */
-export async function refreshExtractionFeedback(prisma: PrismaClient): Promise<void> {
-  // Skip if recently refreshed
-  if (lastFeedbackRefresh && Date.now() - lastFeedbackRefresh.getTime() < FEEDBACK_REFRESH_INTERVAL) {
-    return;
-  }
-
-  try {
-    const feedback = await prisma.extractionFeedback.findMany({
-      where: {
-        occurrences: { gte: 2 }, // Only patterns with 2+ occurrences
-      },
-    });
-
-    // Clear and rebuild lists
-    dynamicBlocklist.clear();
-    dynamicAllowlist.clear();
-    dynamicRenames.clear();
-
-    for (const item of feedback) {
-      const pattern = item.pattern.toLowerCase();
-
-      if (item.feedbackType === 'false_positive') {
-        dynamicBlocklist.add(pattern);
-      } else if (item.feedbackType === 'false_negative' && item.correctValue) {
-        dynamicAllowlist.add(pattern);
-      } else if (item.feedbackType === 'rename' && item.correctValue) {
-        dynamicRenames.set(pattern, item.correctValue.toLowerCase());
-      }
-    }
-
-    lastFeedbackRefresh = new Date();
-    console.log(`[Extraction] Refreshed feedback: ${dynamicBlocklist.size} blocked, ${dynamicAllowlist.size} allowlisted, ${dynamicRenames.size} renames`);
-  } catch (error) {
-    console.warn('[Extraction] Failed to refresh feedback:', error);
-  }
-}
-
 /**
  * Check if an ingredient should be blocked (false positive)
- * Checks both static blocklist and dynamic blocklist from user corrections
  */
 function isBlocked(ingredientName: string): boolean {
-  const lower = ingredientName.toLowerCase();
-  return STATIC_BLOCKLIST.has(lower) || dynamicBlocklist.has(lower);
-}
-
-/**
- * Apply rename mapping if exists
- */
-function applyRename(ingredientName: string): string {
-  const lower = ingredientName.toLowerCase();
-  return dynamicRenames.get(lower) || ingredientName;
-}
-
-/**
- * Get blocklist items for LLM prompt enhancement
- */
-function getBlocklistForPrompt(): string[] {
-  return Array.from(dynamicBlocklist).slice(0, 20); // Limit to top 20
+  return STATIC_BLOCKLIST.has(ingredientName.toLowerCase());
 }
 
 export interface ExtractedIngredient {
@@ -248,12 +162,6 @@ async function extractWithLLM(
 
   const text = description ? `Title: ${title}\n\nDescription: ${description}` : `Title: ${title}`;
 
-  // Build dynamic blocklist section for prompt
-  const blocklist = getBlocklistForPrompt();
-  const blocklistSection = blocklist.length > 0
-    ? `\n10. NEVER extract these (commonly misidentified as ingredients): ${blocklist.join(', ')}.`
-    : '';
-
   try {
     const response = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
@@ -275,7 +183,7 @@ RULES:
 10. EXCLUDE nationality adjectives when used to describe cuisine style (not ingredients): ethiopian, korean, japanese, indian, italian, mexican, etc.
 11. For compound condiments (e.g., "soy sauce", "olive oil", "fish sauce"), keep them as one item.
 12. If the title says "Miso Pasta Recipe", extract "miso" and "pasta" separately.
-13. Only extract ingredients actually mentioned, do not infer or guess.${blocklistSection}`
+13. Only extract ingredients actually mentioned, do not infer or guess.`
         },
         {
           role: 'user',
@@ -304,7 +212,7 @@ JSON array:`
     // Deduplicate after normalization (e.g., "tomato" and "tomatoes" -> same)
     const deduped = new Map<string, ExtractedIngredient>();
     for (const item of parsed) {
-      const name = normalizeIngredientName(item.name);
+      const name = normalizeIngredient(item.name);
 
       // Skip blocklisted items
       if (isBlocked(name)) {
@@ -328,18 +236,6 @@ JSON array:`
 }
 
 /**
- * Normalize ingredient name using synonym mapping (Week 5)
- * Delegates to the comprehensive synonym-based normalizer
- * Also applies dynamic rename mappings from user corrections
- */
-function normalizeIngredientName(name: string): string {
-  // First apply user-corrected renames
-  const renamed = applyRename(name);
-  // Then apply standard normalization
-  return normalizeIngredient(renamed);
-}
-
-/**
  * Extract ingredients from text
  * Uses keyword matching - can be enhanced with ML/NLP
  */
@@ -356,11 +252,11 @@ function extractIngredientsFromText(
   // Check each ingredient keyword
   for (const keyword of INGREDIENT_KEYWORDS) {
     const keywordLower = keyword.toLowerCase();
-    
+
     // Check if keyword appears in text
     if (textLower.includes(keywordLower)) {
-      const normalized = normalizeIngredientName(keyword);
-      
+      const normalized = normalizeIngredient(keyword);
+
       // Calculate confidence based on:
       // - Source (title = higher confidence)
       // - Word boundaries (exact word = higher confidence)
@@ -380,7 +276,7 @@ function extractIngredientsFromText(
         // Title substring match gets reduced confidence
         confidence -= 0.2;
       }
-      
+
       // Boost confidence if it's a multi-word ingredient that matches exactly
       if (keyword.split(' ').length > 1 && textLower.includes(keywordLower)) {
         confidence += 0.1;
@@ -464,21 +360,6 @@ async function extractFromTranscript(
   return [];
 }
 
-// Prisma client for feedback refresh - set via initExtractor()
-let prismaClient: PrismaClient | null = null;
-
-/**
- * Initialize the extractor with a Prisma client for feedback refresh
- * Call this once at startup to enable dynamic feedback
- */
-export function initExtractor(prisma: PrismaClient): void {
-  prismaClient = prisma;
-  // Immediately load feedback on init
-  refreshExtractionFeedback(prisma).catch(err =>
-    console.warn('[Extraction] Failed to load initial feedback:', err)
-  );
-}
-
 /**
  * Extract ingredients from video metadata (and optionally transcript)
  * Uses Groq LLM for intelligent extraction, falls back to keyword matching
@@ -492,11 +373,6 @@ export async function extractIngredientsFromVideo(
   description: string | null,
   transcript?: string | null
 ): Promise<ExtractedIngredient[]> {
-  // Refresh feedback lists if needed (has 1-hour cache)
-  if (prismaClient) {
-    await refreshExtractionFeedback(prismaClient);
-  }
-
   // Collect all ingredients in a map (keyed by name for deduplication)
   const ingredients = new Map<string, ExtractedIngredient>();
 

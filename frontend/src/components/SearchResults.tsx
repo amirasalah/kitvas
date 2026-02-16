@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { trpc } from '@/app/providers'
@@ -417,26 +417,6 @@ function DemandBadge({
 
 function VideoCard({ video }: { video: VideoResult }) {
   const [showAllIngredients, setShowAllIngredients] = useState(false)
-  const [correctionFeedback, setCorrectionFeedback] = useState<string | null>(null)
-
-  const correctionMutation = trpc.corrections.submit.useMutation({
-    onSuccess: (data) => {
-      setCorrectionFeedback(data.message)
-      setTimeout(() => setCorrectionFeedback(null), 3000)
-    },
-    onError: (error) => {
-      setCorrectionFeedback(`Error: ${error.message}`)
-      setTimeout(() => setCorrectionFeedback(null), 3000)
-    },
-  })
-
-  const handleCorrection = (ingredientId: string, action: 'wrong' | 'right') => {
-    correctionMutation.mutate({
-      videoId: video.id,
-      ingredientId,
-      action,
-    })
-  }
 
   const displayedIngredients = showAllIngredients
     ? video.ingredients
@@ -479,12 +459,7 @@ function VideoCard({ video }: { video: VideoResult }) {
           <div className="space-y-2">
             <div className="flex flex-wrap gap-1.5">
               {displayedIngredients.map((ing) => (
-                <IngredientTag
-                  key={ing.id}
-                  ingredient={ing}
-                  onCorrection={(action) => handleCorrection(ing.id, action)}
-                  isLoading={correctionMutation.isPending}
-                />
+                <IngredientTag key={ing.id} ingredient={ing} />
               ))}
             </div>
             {video.ingredients.length > 5 && (
@@ -495,23 +470,6 @@ function VideoCard({ video }: { video: VideoResult }) {
                 {showAllIngredients ? 'Show less' : `+${video.ingredients.length - 5} more`}
               </button>
             )}
-          </div>
-        )}
-
-        {correctionFeedback && (
-          <div className={`mt-3 text-xs p-2 rounded-lg flex items-center justify-between gap-2 ${
-            correctionFeedback.startsWith('Error') ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'
-          }`}>
-            <span>{correctionFeedback}</span>
-            <button
-              onClick={() => setCorrectionFeedback(null)}
-              className="p-0.5 hover:bg-black/10 rounded transition-colors flex-shrink-0"
-              aria-label="Dismiss"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
           </div>
         )}
 
@@ -592,63 +550,20 @@ function YouTubeVideoCard({ video }: { video: YouTubeVideoResult }) {
 
 function IngredientTag({
   ingredient,
-  onCorrection,
-  isLoading,
 }: {
   ingredient: { id: string; name: string; confidence: number; source: string }
-  onCorrection: (action: 'wrong' | 'right') => void
-  isLoading: boolean
 }) {
-  const [showActions, setShowActions] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!showActions) return
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setShowActions(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showActions])
-
   const confidenceLevel = ingredient.confidence >= 0.8 ? 'high' : ingredient.confidence >= 0.5 ? 'medium' : 'low'
   const confidenceStyles = {
-    high: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100',
-    medium: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
-    low: 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100',
+    high: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    medium: 'bg-amber-50 text-amber-700 border-amber-200',
+    low: 'bg-gray-50 text-gray-600 border-gray-200',
   }
 
   return (
-    <div ref={containerRef} className="relative inline-block">
-      <button
-        onClick={() => setShowActions(!showActions)}
-        disabled={isLoading}
-        className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${confidenceStyles[confidenceLevel]}`}
-      >
-        {ingredient.name}
-      </button>
-
-      {showActions && !isLoading && (
-        <div className="absolute top-full left-0 mt-1 flex gap-1 bg-white shadow-lg rounded-lg border p-1 z-20">
-          <button
-            onClick={() => { onCorrection('right'); setShowActions(false) }}
-            className="text-xs px-2.5 py-1.5 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100 whitespace-nowrap"
-          >
-            ✓ Correct
-          </button>
-          <button
-            onClick={() => { onCorrection('wrong'); setShowActions(false) }}
-            className="text-xs px-2.5 py-1.5 bg-red-50 text-red-700 rounded hover:bg-red-100 whitespace-nowrap"
-          >
-            ✗ Wrong
-          </button>
-        </div>
-      )}
-    </div>
+    <span className={`text-xs px-2.5 py-1 rounded-lg border ${confidenceStyles[confidenceLevel]}`}>
+      {ingredient.name}
+    </span>
   )
 }
 

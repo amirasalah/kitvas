@@ -1,16 +1,13 @@
 /**
  * Opportunity Classifier
  *
- * A lightweight rule-based classifier that uses calibration data to improve
- * opportunity score predictions. No external ML dependencies needed.
+ * A lightweight rule-based classifier that scores content opportunities.
  *
  * The classifier:
  * 1. Takes demand signal features as input
- * 2. Applies calibrated thresholds from OpportunityCalibration table
+ * 2. Applies static thresholds
  * 3. Returns a score ('high' | 'medium' | 'low') with confidence and reasoning
  */
-
-import { PrismaClient } from '@prisma/client';
 
 export interface OpportunityFeatures {
   demandScore: number;      // 0-100 from demand calculator
@@ -23,129 +20,12 @@ export interface OpportunityFeatures {
 
 export interface ClassificationResult {
   score: 'high' | 'medium' | 'low';
-  confidence: number;       // 0-1 based on calibration data
+  confidence: number;       // 0-1
   reasoning: string;        // Human-readable explanation
-  calibrationBased: boolean; // Whether calibration data was used
-}
-
-// Default thresholds (used when no calibration data)
-const DEFAULT_THRESHOLDS = {
-  high: {
-    demandScore: 70,
-    contentGapScore: 60,
-    minViews: 50000,
-  },
-  medium: {
-    demandScore: 45,
-    contentGapScore: 40,
-    minViews: 10000,
-  },
-};
-
-// Calibrated weights from outcome analysis
-// These can be updated by the calibration script
-interface CalibratedWeights {
-  demandScoreWeight: number;
-  contentGapWeight: number;
-  viewsWeight: number;
-  freshnessWeight: number;
-  highThreshold: number;
-  mediumThreshold: number;
-}
-
-// Cache for calibration data
-let calibrationCache: Map<string, { successRate: number; totalOutcomes: number; avgViews7day: number }> | null = null;
-let calibrationCacheTime: Date | null = null;
-const CALIBRATION_CACHE_TTL = 60 * 60 * 1000; // 1 hour
-
-// Derived calibration multipliers based on historical performance
-let demandBandMultipliers: Map<string, number> | null = null;
-
-/**
- * Load calibration data from database
- */
-async function loadCalibrationData(prisma: PrismaClient): Promise<void> {
-  // Check cache freshness
-  if (calibrationCache && calibrationCacheTime &&
-      Date.now() - calibrationCacheTime.getTime() < CALIBRATION_CACHE_TTL) {
-    return;
-  }
-
-  try {
-    const calibrations = await prisma.opportunityCalibration.findMany({
-      where: { totalOutcomes: { gte: 3 } }, // Only use buckets with enough data
-    });
-
-    calibrationCache = new Map();
-    demandBandMultipliers = new Map();
-
-    // Track success rates by demand band to compute multipliers
-    const bandStats = new Map<string, { totalSuccess: number; totalOutcomes: number }>();
-
-    for (const cal of calibrations) {
-      const key = `${cal.demandBand}:${cal.opportunityScore}`;
-      calibrationCache.set(key, {
-        successRate: cal.successRate,
-        totalOutcomes: cal.totalOutcomes,
-        avgViews7day: cal.avgViews7day,
-      });
-
-      // Accumulate band-level stats
-      const bandKey = cal.demandBand;
-      const existing = bandStats.get(bandKey) || { totalSuccess: 0, totalOutcomes: 0 };
-      existing.totalSuccess += cal.successRate * cal.totalOutcomes;
-      existing.totalOutcomes += cal.totalOutcomes;
-      bandStats.set(bandKey, existing);
-    }
-
-    // Compute demand band multipliers based on actual success rates
-    // If a band has higher-than-expected success, boost scores in that band
-    const overallSuccessRate = Array.from(bandStats.values())
-      .reduce((sum, s) => sum + s.totalSuccess, 0) /
-      Math.max(1, Array.from(bandStats.values()).reduce((sum, s) => sum + s.totalOutcomes, 0));
-
-    for (const [band, stats] of bandStats) {
-      if (stats.totalOutcomes >= 5) {
-        const bandSuccessRate = stats.totalSuccess / stats.totalOutcomes;
-        // Multiplier: if band performs 50% better than average, multiply by 1.25
-        const multiplier = Math.max(0.5, Math.min(1.5, bandSuccessRate / Math.max(0.1, overallSuccessRate)));
-        demandBandMultipliers.set(band, multiplier);
-      }
-    }
-
-    calibrationCacheTime = new Date();
-    console.log(`[Classifier] Loaded ${calibrations.length} calibration entries, ${demandBandMultipliers.size} band multipliers`);
-  } catch (error) {
-    console.warn('[Classifier] Failed to load calibration:', error);
-    calibrationCache = new Map();
-    demandBandMultipliers = new Map();
-  }
-}
-
-/**
- * Get calibrated success rate for a demand band + score combination
- */
-function getCalibratedSuccessRate(demandBand: string, score: string): number | null {
-  if (!calibrationCache) return null;
-
-  const key = `${demandBand}:${score}`;
-  const cal = calibrationCache.get(key);
-
-  return cal ? cal.successRate : null;
-}
-
-/**
- * Get calibration multiplier for a demand band
- * Returns 1.0 if no calibration data available
- */
-function getDemandBandMultiplier(demandBand: string): number {
-  if (!demandBandMultipliers) return 1.0;
-  return demandBandMultipliers.get(demandBand) ?? 1.0;
 }
 
 /**
  * Calculate a composite opportunity score from features
- * Applies calibration-based multipliers when available
  */
 function calculateCompositeScore(features: OpportunityFeatures): number {
   const {
@@ -153,7 +33,6 @@ function calculateCompositeScore(features: OpportunityFeatures): number {
     contentGapScore,
     avgViews,
     recentVideoRatio,
-    demandBand,
   } = features;
 
   // Normalize views to 0-100 scale (log scale, caps at 1M)
@@ -163,21 +42,12 @@ function calculateCompositeScore(features: OpportunityFeatures): number {
   const freshnessBonus = recentVideoRatio > 0.3 ? 10 : 0;
 
   // Weighted composite score
-  let composite = (
+  const composite = (
     demandScore * 0.35 +           // Demand is most important
     contentGapScore * 0.30 +       // Content gap is second
     normalizedViews * 0.20 +       // Views validate demand
     freshnessBonus * 0.15          // Freshness indicates trends
   );
-
-  // Apply calibration-based multiplier for the demand band
-  // If outcomes show this demand band performs better/worse than expected, adjust
-  const multiplier = getDemandBandMultiplier(demandBand);
-  if (multiplier !== 1.0) {
-    composite *= multiplier;
-    // Clamp to 0-100 range
-    composite = Math.max(0, Math.min(100, composite));
-  }
 
   return Math.round(composite);
 }
@@ -185,75 +55,33 @@ function calculateCompositeScore(features: OpportunityFeatures): number {
 /**
  * Classify an opportunity based on features
  */
-export async function classifyOpportunity(
-  prisma: PrismaClient,
-  features: OpportunityFeatures
-): Promise<ClassificationResult> {
-  // Load calibration data
-  await loadCalibrationData(prisma);
-
+export function classifyOpportunity(features: OpportunityFeatures): ClassificationResult {
   const compositeScore = calculateCompositeScore(features);
-  const { demandBand, contentGapScore, avgViews, videoCount } = features;
+  const { contentGapScore, videoCount } = features;
 
-  // Get calibrated success rates for each score tier
-  const highSuccessRate = getCalibratedSuccessRate(demandBand, 'high');
-  const mediumSuccessRate = getCalibratedSuccessRate(demandBand, 'medium');
-  const lowSuccessRate = getCalibratedSuccessRate(demandBand, 'low');
-
-  const hasCalibration = highSuccessRate !== null || mediumSuccessRate !== null;
-
-  // Decision logic
   let score: 'high' | 'medium' | 'low';
   let confidence: number;
-  let reasoning: string;
 
   if (compositeScore >= 70 && contentGapScore >= 50) {
     score = 'high';
-    confidence = hasCalibration && highSuccessRate !== null
-      ? highSuccessRate
-      : 0.7; // Default confidence
-
-    reasoning = buildReasoning('high', features, compositeScore);
-
-    // Adjust confidence based on calibration
-    if (highSuccessRate !== null && highSuccessRate < 0.4) {
-      // Calibration shows high scores don't actually perform well
-      score = 'medium';
-      reasoning += ' (Downgraded: calibration shows lower success rate)';
-    }
+    confidence = 0.7;
   } else if (compositeScore >= 45 && contentGapScore >= 30) {
     score = 'medium';
-    confidence = hasCalibration && mediumSuccessRate !== null
-      ? mediumSuccessRate
-      : 0.5;
-
-    reasoning = buildReasoning('medium', features, compositeScore);
-
-    // Potential upgrade if calibration is very positive
-    if (mediumSuccessRate !== null && mediumSuccessRate > 0.7) {
-      reasoning += ' (Calibration shows this tier performs well)';
-      confidence = mediumSuccessRate;
-    }
+    confidence = 0.5;
   } else {
     score = 'low';
-    confidence = hasCalibration && lowSuccessRate !== null
-      ? 1 - lowSuccessRate // Confidence in "low" = inverse of success
-      : 0.6;
-
-    reasoning = buildReasoning('low', features, compositeScore);
+    confidence = 0.6;
   }
 
   // Adjust confidence based on data quality
   if (videoCount < 5) {
     confidence *= 0.7; // Less confident with small sample
-    reasoning += ' (Limited data)';
   }
 
   return {
     score,
     confidence: Math.round(confidence * 100) / 100,
-    reasoning,
-    calibrationBased: hasCalibration,
+    reasoning: buildReasoning(score, features, compositeScore),
   };
 }
 
@@ -304,32 +132,4 @@ function buildReasoning(
   const reasoningText = parts.length > 0 ? parts.join(', ') : 'Based on composite analysis';
 
   return `${score.toUpperCase()}: ${reasoningText} (score: ${compositeScore})`;
-}
-
-/**
- * Simple classification without database access (for quick estimates)
- */
-export function classifyOpportunitySimple(features: OpportunityFeatures): Omit<ClassificationResult, 'calibrationBased'> {
-  const compositeScore = calculateCompositeScore(features);
-  const { contentGapScore } = features;
-
-  let score: 'high' | 'medium' | 'low';
-  let confidence: number;
-
-  if (compositeScore >= 70 && contentGapScore >= 50) {
-    score = 'high';
-    confidence = 0.7;
-  } else if (compositeScore >= 45 && contentGapScore >= 30) {
-    score = 'medium';
-    confidence = 0.5;
-  } else {
-    score = 'low';
-    confidence = 0.6;
-  }
-
-  return {
-    score,
-    confidence,
-    reasoning: buildReasoning(score, features, compositeScore),
-  };
 }

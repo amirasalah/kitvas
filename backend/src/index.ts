@@ -6,16 +6,12 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from './router.js';
 import { createContext } from './context.js';
 import { startExtractionWorker } from './lib/extraction-queue.js';
-import { initExtractor } from './lib/ingredient-extractor.js';
 import { broadcaster } from './lib/sse-broadcast.js';
 import { queryHotIngredients } from './lib/hot-ingredients-query.js';
 import { PrismaClient } from '@prisma/client';
 
 // Initialize Prisma for extraction worker
 const prisma = new PrismaClient();
-
-// Initialize extractor with feedback from corrections (ML feedback loop)
-initExtractor(prisma);
 
 const app = new Hono();
 

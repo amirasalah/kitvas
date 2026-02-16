@@ -97,21 +97,6 @@ export const outcomesRouter = t.router({
           });
         }
 
-        // Immediately update calibration data (closes the feedback loop)
-        // This ensures future predictions benefit from this outcome right away
-        // Look up the demand band from the DemandSignal table
-        const ingredientKey = [...opportunity.ingredients].sort().join('|');
-        const demandSignal = await ctx.prisma.demandSignal.findUnique({
-          where: { ingredientKey },
-          select: { demandBand: true },
-        });
-
-        await updateCalibrationFromOutcome(
-          ctx.prisma,
-          { demandBand: demandSignal?.demandBand || null, opportunityScore: opportunity.opportunityScore },
-          outcome
-        );
-
         return {
           success: true,
           outcomeId: outcome.id,
@@ -320,75 +305,3 @@ function calculateAccuracy(
   };
 }
 
-/**
- * Immediately update calibration data when an outcome is submitted
- * This closes the feedback loop so future predictions benefit right away
- */
-async function updateCalibrationFromOutcome(
-  prisma: import('@prisma/client').PrismaClient,
-  opportunity: { demandBand: string | null; opportunityScore: string },
-  outcome: { views7day: number | null; rating: number | null }
-): Promise<void> {
-  const demandBand = opportunity.demandBand || 'unknown';
-  const opportunityScore = opportunity.opportunityScore;
-
-  try {
-    // Find or create the calibration bucket
-    const existing = await prisma.opportunityCalibration.findUnique({
-      where: {
-        demandBand_opportunityScore: {
-          demandBand,
-          opportunityScore,
-        },
-      },
-    });
-
-    const isSuccess = (outcome.rating || 0) >= 4;
-    const views = outcome.views7day || 0;
-
-    if (existing) {
-      // Update existing calibration with incremental calculation
-      const newTotal = existing.totalOutcomes + 1;
-      const newAvgViews = Math.round(
-        (existing.avgViews7day * existing.totalOutcomes + views) / newTotal
-      );
-      const newAvgRating =
-        (existing.avgRating * existing.totalOutcomes + (outcome.rating || 0)) / newTotal;
-      const successCount = Math.round(existing.successRate * existing.totalOutcomes);
-      const newSuccessRate = (successCount + (isSuccess ? 1 : 0)) / newTotal;
-
-      await prisma.opportunityCalibration.update({
-        where: {
-          demandBand_opportunityScore: {
-            demandBand,
-            opportunityScore,
-          },
-        },
-        data: {
-          totalOutcomes: newTotal,
-          avgViews7day: newAvgViews,
-          avgRating: Math.round(newAvgRating * 100) / 100,
-          successRate: Math.round(newSuccessRate * 100) / 100,
-          calculatedAt: new Date(),
-        },
-      });
-    } else {
-      // Create new calibration entry
-      await prisma.opportunityCalibration.create({
-        data: {
-          demandBand,
-          opportunityScore,
-          totalOutcomes: 1,
-          avgViews7day: views,
-          avgRating: outcome.rating || 0,
-          successRate: isSuccess ? 1.0 : 0.0,
-        },
-      });
-    }
-
-    console.log(`[Calibration] Updated ${demandBand}:${opportunityScore} with new outcome`);
-  } catch (error) {
-    // Don't fail the outcome submission if calibration update fails
-    console.warn('[Calibration] Failed to update calibration:', error);
-  }
-}

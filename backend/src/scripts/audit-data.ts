@@ -16,22 +16,16 @@ async function main(): Promise<void> {
 
   // Core data tables
   const [
-    corrections,
     outcomes,
     ingredientTrends,
-    extractionFeedback,
-    opportunityCalibration,
     googleTrends,
     googleTrendRelated,
     videos,
     ingredients,
     searches,
   ] = await Promise.all([
-    prisma.correction.count(),
     prisma.outcome.count(),
     prisma.ingredientTrend.count(),
-    prisma.extractionFeedback.count(),
-    prisma.opportunityCalibration.count(),
     prisma.googleTrend.count(),
     prisma.googleTrendRelatedQuery.count(),
     prisma.video.count(),
@@ -40,11 +34,8 @@ async function main(): Promise<void> {
   ]);
 
   console.log('--- Core Training Data ---');
-  console.log(`  Corrections: ${corrections}`);
   console.log(`  Outcomes: ${outcomes}`);
   console.log(`  Ingredient Trends: ${ingredientTrends}`);
-  console.log(`  Extraction Feedback: ${extractionFeedback}`);
-  console.log(`  Opportunity Calibration: ${opportunityCalibration}`);
 
   console.log('\n--- Google Trends Data ---');
   console.log(`  Google Trend records: ${googleTrends}`);
@@ -57,12 +48,6 @@ async function main(): Promise<void> {
 
   // ML Readiness Assessment
   console.log('\n--- ML Readiness Assessment ---');
-
-  if (corrections >= 500) {
-    console.log('  ✓ Extraction Quality Classifier: READY (500+ corrections)');
-  } else {
-    console.log(`  ✗ Extraction Quality Classifier: Need ${500 - corrections} more corrections`);
-  }
 
   if (outcomes >= 200) {
     console.log('  ✓ Opportunity Success Predictor: READY (200+ outcomes)');
@@ -89,19 +74,6 @@ async function main(): Promise<void> {
     }
   } else {
     console.log('  ✗ Demand Forecasting Model: No Google Trends data yet');
-  }
-
-  // Correction breakdown
-  if (corrections > 0) {
-    const correctionBreakdown = await prisma.correction.groupBy({
-      by: ['action'],
-      _count: { id: true },
-    });
-
-    console.log('\n--- Correction Breakdown ---');
-    for (const c of correctionBreakdown) {
-      console.log(`  ${c.action}: ${c._count.id}`);
-    }
   }
 
   // IngredientTrend analysis (checking if orphaned)

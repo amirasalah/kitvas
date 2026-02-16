@@ -1,14 +1,12 @@
 /**
  * Analytics Router
  *
- * Provides insights and ML training data endpoints:
+ * Provides insights endpoints:
  * - Hot ingredients from Google Trends (today/week/month)
  * - Trending ingredients (7d/30d/90d)
  * - Seasonal patterns
  * - Content gaps (underserved ingredient combinations)
  * - Ingredient co-occurrence
- * - Extraction accuracy tracking
- * - Opportunity calibration data
  * - Dashboard summary
  */
 
@@ -355,246 +353,21 @@ export const analyticsRouter = t.router({
     }),
 
   /**
-   * Get per-ingredient extraction accuracy
-   * Calculated from user corrections: (right - wrong) / total
-   */
-  ingredientAccuracy: t.procedure
-    .input(
-      z.object({
-        minCorrections: z.number().min(1).default(3),
-        limit: z.number().min(1).max(100).default(50),
-      })
-    )
-    .query(async ({ input, ctx }) => {
-      const { minCorrections, limit } = input;
-
-      // Get correction counts by ingredient
-      const correctionStats = await ctx.prisma.correction.groupBy({
-        by: ['ingredientId', 'action'],
-        _count: { id: true },
-      });
-
-      // Aggregate by ingredient
-      const ingredientStats = new Map<string, { right: number; wrong: number; add: number; rename: number }>();
-
-      for (const stat of correctionStats) {
-        if (!ingredientStats.has(stat.ingredientId)) {
-          ingredientStats.set(stat.ingredientId, { right: 0, wrong: 0, add: 0, rename: 0 });
-        }
-        const stats = ingredientStats.get(stat.ingredientId)!;
-        if (stat.action === 'right') stats.right = stat._count.id;
-        else if (stat.action === 'wrong') stats.wrong = stat._count.id;
-        else if (stat.action === 'add') stats.add = stat._count.id;
-        else if (stat.action === 'rename') stats.rename = stat._count.id;
-      }
-
-      // Filter to ingredients with minimum corrections and calculate accuracy
-      const ingredientIds = Array.from(ingredientStats.entries())
-        .filter(([_, stats]) => stats.right + stats.wrong >= minCorrections)
-        .map(([id]) => id);
-
-      if (ingredientIds.length === 0) {
-        return {
-          minCorrections,
-          ingredients: [],
-          summary: {
-            totalWithFeedback: 0,
-            avgAccuracy: null,
-            needsAttention: [],
-          },
-        };
-      }
-
-      // Get ingredient names
-      const ingredients = await ctx.prisma.ingredient.findMany({
-        where: { id: { in: ingredientIds } },
-        select: { id: true, name: true },
-      });
-
-      const nameMap = new Map(ingredients.map((i) => [i.id, i.name]));
-
-      // Build results
-      const results = ingredientIds
-        .map((id) => {
-          const stats = ingredientStats.get(id)!;
-          const total = stats.right + stats.wrong;
-          const accuracy = total > 0 ? stats.right / total : null;
-
-          return {
-            ingredientId: id,
-            name: nameMap.get(id) || 'Unknown',
-            rightCount: stats.right,
-            wrongCount: stats.wrong,
-            addCount: stats.add,
-            renameCount: stats.rename,
-            totalCorrections: stats.right + stats.wrong + stats.add + stats.rename,
-            accuracy,
-          };
-        })
-        .filter((r) => r.accuracy !== null)
-        .sort((a, b) => (a.accuracy || 0) - (b.accuracy || 0)) // Worst first
-        .slice(0, limit);
-
-      // Calculate summary
-      const accuracies = results.map((r) => r.accuracy!).filter((a) => a !== null);
-      const avgAccuracy = accuracies.length > 0
-        ? accuracies.reduce((a, b) => a + b, 0) / accuracies.length
-        : null;
-
-      const needsAttention = results
-        .filter((r) => r.accuracy !== null && r.accuracy < 0.7)
-        .slice(0, 10)
-        .map((r) => r.name);
-
-      return {
-        minCorrections,
-        ingredients: results.map((r) => ({
-          ...r,
-          accuracy: r.accuracy !== null ? Math.round(r.accuracy * 100) / 100 : null,
-        })),
-        summary: {
-          totalWithFeedback: results.length,
-          avgAccuracy: avgAccuracy !== null ? Math.round(avgAccuracy * 100) / 100 : null,
-          needsAttention,
-        },
-      };
-    }),
-
-  /**
-   * Get extraction accuracy metrics
-   * Shows current precision/recall/F1 and historical trend
-   */
-  extractionAccuracy: t.procedure.query(async ({ ctx }) => {
-    // Get latest accuracy snapshot
-    const latest = await ctx.prisma.accuracySnapshot.findFirst({
-      orderBy: { measuredAt: 'desc' },
-    });
-
-    // Get historical snapshots (last 10)
-    const history = await ctx.prisma.accuracySnapshot.findMany({
-      orderBy: { measuredAt: 'desc' },
-      take: 10,
-    });
-
-    // Get correction stats for context
-    const totalCorrections = await ctx.prisma.correction.count();
-    const recentCorrections = await ctx.prisma.correction.count({
-      where: {
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-      },
-    });
-
-    // Get extraction feedback stats
-    const feedbackStats = await ctx.prisma.extractionFeedback.groupBy({
-      by: ['feedbackType'],
-      _count: { id: true },
-      _sum: { occurrences: true },
-    });
-
-    return {
-      current: latest
-        ? {
-            precision: latest.precision,
-            recall: latest.recall,
-            f1: latest.f1,
-            exactMatch: latest.exactMatch,
-            sampleSize: latest.sampleSize,
-            measuredAt: latest.measuredAt,
-          }
-        : null,
-      history: history.map((h) => ({
-        f1: h.f1,
-        measuredAt: h.measuredAt,
-      })),
-      corrections: {
-        total: totalCorrections,
-        lastWeek: recentCorrections,
-      },
-      feedback: feedbackStats.map((f) => ({
-        type: f.feedbackType,
-        patterns: f._count.id,
-        totalOccurrences: f._sum.occurrences || 0,
-      })),
-    };
-  }),
-
-  /**
-   * Get opportunity calibration data
-   * Shows how accurate opportunity predictions have been
-   */
-  opportunityCalibration: t.procedure.query(async ({ ctx }) => {
-    // Get stored calibration data
-    const calibrations = await ctx.prisma.opportunityCalibration.findMany({
-      orderBy: [{ demandBand: 'asc' }, { opportunityScore: 'asc' }],
-    });
-
-    // Get raw outcome stats for comparison
-    const outcomes = await ctx.prisma.outcome.findMany({
-      where: { rating: { not: null } },
-      include: {
-        trackedOpportunity: {
-          select: { opportunityScore: true, ingredients: true },
-        },
-      },
-    });
-
-    // Calculate live stats by opportunity score
-    const liveStats = new Map<string, { count: number; totalViews: number; totalRating: number; successCount: number }>();
-
-    for (const outcome of outcomes) {
-      const score = outcome.trackedOpportunity.opportunityScore;
-      const stats = liveStats.get(score) || { count: 0, totalViews: 0, totalRating: 0, successCount: 0 };
-
-      stats.count++;
-      stats.totalViews += outcome.views7day || 0;
-      stats.totalRating += outcome.rating || 0;
-      if ((outcome.rating || 0) >= 4) stats.successCount++;
-
-      liveStats.set(score, stats);
-    }
-
-    return {
-      calibrations: calibrations.map((c) => ({
-        demandBand: c.demandBand,
-        opportunityScore: c.opportunityScore,
-        totalOutcomes: c.totalOutcomes,
-        avgViews7day: c.avgViews7day,
-        avgRating: c.avgRating,
-        successRate: c.successRate,
-        calculatedAt: c.calculatedAt,
-      })),
-      liveStats: Array.from(liveStats.entries()).map(([score, stats]) => ({
-        opportunityScore: score,
-        count: stats.count,
-        avgViews7day: stats.count > 0 ? Math.round(stats.totalViews / stats.count) : 0,
-        avgRating: stats.count > 0 ? +(stats.totalRating / stats.count).toFixed(2) : 0,
-        successRate: stats.count > 0 ? +(stats.successCount / stats.count).toFixed(2) : 0,
-      })),
-      totalOutcomes: outcomes.length,
-    };
-  }),
-
-  /**
    * Dashboard summary - single endpoint for insights UI
    */
   dashboard: t.procedure.query(async ({ ctx }) => {
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     // Parallel queries for dashboard data
     const [
       weeklySearches,
-      weeklyCorrections,
       weeklyOutcomes,
-      latestAccuracy,
       topTrending,
       topGaps,
     ] = await Promise.all([
       ctx.prisma.search.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
-      ctx.prisma.correction.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
       ctx.prisma.outcome.count({ where: { reportedAt: { gte: sevenDaysAgo } } }),
-      ctx.prisma.accuracySnapshot.findFirst({ orderBy: { measuredAt: 'desc' } }),
       // Top 5 trending (simplified)
       ctx.prisma.search.findMany({
         where: { createdAt: { gte: sevenDaysAgo } },
@@ -624,16 +397,8 @@ export const analyticsRouter = t.router({
     return {
       weeklyStats: {
         searches: weeklySearches,
-        corrections: weeklyCorrections,
         outcomes: weeklyOutcomes,
       },
-      accuracy: latestAccuracy
-        ? {
-            f1: latestAccuracy.f1,
-            trend: 'stable' as const, // Would need historical comparison
-            measuredAt: latestAccuracy.measuredAt,
-          }
-        : null,
       trending,
       topGaps: topGaps.map((g) => ({
         ingredients: g.ingredients,
@@ -642,42 +407,6 @@ export const analyticsRouter = t.router({
       })),
     };
   }),
-
-  /**
-   * Export corrections for training data
-   */
-  exportCorrections: t.procedure
-    .input(
-      z.object({
-        since: z.date().optional(),
-        limit: z.number().min(1).max(10000).default(1000),
-      })
-    )
-    .query(async ({ input, ctx }) => {
-      const { since, limit } = input;
-
-      const corrections = await ctx.prisma.correction.findMany({
-        where: since ? { createdAt: { gte: since } } : undefined,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          video: { select: { title: true, description: true } },
-          ingredient: { select: { name: true } },
-        },
-      });
-
-      return {
-        count: corrections.length,
-        corrections: corrections.map((c) => ({
-          videoTitle: c.video.title,
-          videoDescription: c.video.description,
-          ingredientName: c.ingredient.name,
-          action: c.action,
-          suggestedName: c.suggestedName,
-          createdAt: c.createdAt,
-        })),
-      };
-    }),
 
   /**
    * Get ingredient trend history (sparkline data)
@@ -841,47 +570,4 @@ export const analyticsRouter = t.router({
       };
     }),
 
-  /**
-   * Get extraction feedback patterns (for prompt improvement)
-   */
-  extractionFeedback: t.procedure
-    .input(
-      z.object({
-        type: z.enum(['false_positive', 'false_negative', 'rename', 'all']).default('all'),
-        incorporated: z.boolean().optional(),
-        minOccurrences: z.number().min(1).default(2),
-      })
-    )
-    .query(async ({ input, ctx }) => {
-      const { type, incorporated, minOccurrences } = input;
-
-      const where: any = {
-        occurrences: { gte: minOccurrences },
-      };
-
-      if (type !== 'all') {
-        where.feedbackType = type;
-      }
-
-      if (incorporated !== undefined) {
-        where.incorporated = incorporated;
-      }
-
-      const feedback = await ctx.prisma.extractionFeedback.findMany({
-        where,
-        orderBy: { occurrences: 'desc' },
-      });
-
-      return {
-        count: feedback.length,
-        feedback: feedback.map((f) => ({
-          pattern: f.pattern,
-          feedbackType: f.feedbackType,
-          correctValue: f.correctValue,
-          occurrences: f.occurrences,
-          incorporated: f.incorporated,
-          updatedAt: f.updatedAt,
-        })),
-      };
-    }),
 });

@@ -66,24 +66,6 @@ export const scheduledJobs: ScheduledJob[] = [
   },
 
   {
-    name: 'aggregate-corrections',
-    description: 'Aggregate user corrections for ML improvement',
-    schedule: '0 4 * * 1', // Weekly on Mondays at 4:00 AM UTC
-    script: 'src/scripts/aggregate-corrections.ts',
-    enabled: true,
-    timeout: 15 * 60 * 1000, // 15 minutes
-  },
-
-  {
-    name: 'calibrate-opportunities',
-    description: 'Calibrate opportunity scoring based on correction patterns',
-    schedule: '0 5 * * 2', // Weekly on Tuesdays at 5:00 AM UTC
-    script: 'src/scripts/calibrate-opportunities.ts',
-    enabled: true,
-    timeout: 20 * 60 * 1000, // 20 minutes
-  },
-
-  {
     name: 'fetch-ingredients',
     description: 'Fetch new ingredients and synonyms from Wikidata',
     schedule: '0 6 * * 3', // Weekly on Wednesdays at 6:00 AM UTC

@@ -4,13 +4,9 @@ import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 import { useState } from 'react'
 
-const ADMIN_EMAIL = 'amira.salah.rahim@gmail.com'
-
 export function Navbar() {
   const { data: session, status } = useSession()
   const [showDropdown, setShowDropdown] = useState(false)
-
-  const isAdmin = session?.user?.email === ADMIN_EMAIL
 
   return (
     <nav className="sticky top-0 z-50 backdrop-blur-md bg-white/10">
@@ -23,14 +19,6 @@ export function Navbar() {
 
           {/* Navigation */}
           <div className="flex items-center gap-3">
-            {isAdmin && (
-              <Link
-                href="/admin/label"
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Admin
-              </Link>
-            )}
             {session && (
               <Link
                 href="/opportunities"

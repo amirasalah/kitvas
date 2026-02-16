@@ -24,21 +24,3 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
     },
   });
 });
-
-const ADMIN_EMAILS = ['amira.salah.rahim@gmail.com'];
-
-export const adminProcedure = t.procedure.use(async ({ ctx, next }) => {
-  if (!ctx.userId || !ctx.userEmail || !ADMIN_EMAILS.includes(ctx.userEmail)) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Admin access required.',
-    });
-  }
-  return next({
-    ctx: {
-      ...ctx,
-      userId: ctx.userId,
-      userEmail: ctx.userEmail,
-    },
-  });
-});

@@ -19,13 +19,10 @@ model User {
   subscription          String    @default("free") // 'free' | 'pro'
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
-  correctionsCount      Int       @default(0)
-
   // Relations
   accounts              Account[]
   sessions              Session[]
   searches              Search[]
-  corrections           Correction[]
   trackedOpportunities  TrackedOpportunity[]
   outcomes              Outcome[]
 
@@ -86,16 +83,11 @@ model Video {
   viewsUpdatedAt DateTime?  // When views were last refreshed from YouTube API
   channelId      String?    // YouTube channel ID
   extractedAt    DateTime?
-  labeledAt      DateTime?  // When this video was manually verified/labeled
-  labeledBy      String?    // Admin who labeled it
-
   videoIngredients VideoIngredient[]
-  corrections      Correction[]
   videoTags        VideoTag[]
 
   @@index([youtubeId])
   @@index([publishedAt])
-  @@index([labeledAt])
   @@index([viewsUpdatedAt])
   // Full-text search index will be added via SQL migration
 }
@@ -121,7 +113,6 @@ model Ingredient {
   createdAt DateTime @default(now())
 
   videoIngredients VideoIngredient[]
-  corrections      Correction[]
   trends           IngredientTrend[]
   synonyms         IngredientSynonym[]
 
@@ -171,23 +162,6 @@ model Search {
 
   @@index([userId, createdAt])
   @@index([createdAt])
-}
-
-model Correction {
-  id           String   @id @default(cuid())
-  userId       String
-  videoId      String
-  ingredientId String
-  action       String   // 'wrong' | 'right' | 'add' | 'rename'
-  suggestedName String?
-  createdAt    DateTime @default(now())
-  
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  video      Video      @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
-  
-  @@index([videoId, ingredientId])
-  @@index([userId])
 }
 
 model TrackedOpportunity {
@@ -266,50 +240,6 @@ model IngredientTrend {
   @@unique([ingredientId, period, periodStart])
   @@index([period, periodStart])
   @@index([searchCount])
-}
-
-// Aggregates correction patterns for extraction improvement
-model ExtractionFeedback {
-  id           String   @id @default(cuid())
-  pattern      String   // Text pattern (e.g., "ethiopian", "chocolate")
-  feedbackType String   // 'false_positive' | 'false_negative' | 'rename'
-  correctValue String?  // What it should be (null for false positives to block)
-  occurrences  Int      @default(1) // How many times this pattern was corrected
-  incorporated Boolean  @default(false) // Has this been added to extraction logic?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@unique([pattern, feedbackType])
-  @@index([incorporated])
-  @@index([feedbackType, occurrences])
-}
-
-// Tracks how accurate opportunity predictions have been
-model OpportunityCalibration {
-  id               String   @id @default(cuid())
-  demandBand       String   // 'hot' | 'growing' | 'stable' | 'niche'
-  opportunityScore String   // 'high' | 'medium' | 'low'
-  totalOutcomes    Int      // Number of outcomes in this bucket
-  avgViews7day     Int      // Average 7-day views for this bucket
-  avgRating        Float    // Average user rating (1-5)
-  successRate      Float    // Percentage with rating >= 4
-  calculatedAt     DateTime @default(now())
-
-  @@unique([demandBand, opportunityScore])
-  @@index([calculatedAt])
-}
-
-// Historical snapshots of extraction accuracy for tracking improvement
-model AccuracySnapshot {
-  id         String   @id @default(cuid())
-  precision  Float    // True positives / (True positives + False positives)
-  recall     Float    // True positives / (True positives + False negatives)
-  f1         Float    // Harmonic mean of precision and recall
-  exactMatch Float    // Percentage with zero errors
-  sampleSize Int      // Number of labeled videos used
-  measuredAt DateTime @default(now())
-
-  @@index([measuredAt])
 }
 
 // ============================================================================

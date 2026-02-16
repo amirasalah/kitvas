@@ -15,7 +15,7 @@
 import { config } from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { fetchTranscript } from '../lib/transcript-fetcher.js';
-import { extractIngredientsFromVideo, storeExtractedIngredients, initExtractor } from '../lib/ingredient-extractor.js';
+import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/ingredient-extractor.js';
 
 config();
 
@@ -25,9 +25,6 @@ async function backfillTranscripts(limit: number = 500) {
   console.log('═══════════════════════════════════════════════════════════');
   console.log('  Transcript Backfill - Re-extract with transcript priority');
   console.log('═══════════════════════════════════════════════════════════\n');
-
-  // Initialize extractor feedback loop
-  initExtractor(prisma);
 
   // Find videos without a stored transcript, ordered by views
   const videos = await prisma.video.findMany({
