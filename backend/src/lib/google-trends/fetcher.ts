@@ -24,7 +24,6 @@ export class GoogleTrendsFetcher {
    * Get keywords to track based on:
    * 1. Top searched ingredients (last 30 days)
    * 2. Ingredients with high demand signals
-   * 3. Ingredients from tracked opportunities
    */
   async getKeywordsToTrack(limit: number = 50): Promise<string[]> {
     const keywords = new Set<string>();
@@ -63,19 +62,6 @@ export class GoogleTrendsFetcher {
     for (const signal of highDemandSignals) {
       for (const ingredient of signal.ingredients.slice(0, 2)) {
         // Take first 2 ingredients from each combination
-        keywords.add(ingredient.toLowerCase().trim());
-      }
-    }
-
-    // Priority 3: Tracked opportunity ingredients (10 keywords)
-    const trackedOpportunities = await this.prisma.trackedOpportunity.findMany({
-      where: { status: { in: ['researching', 'filming'] } },
-      take: 10,
-      select: { ingredients: true },
-    });
-
-    for (const opp of trackedOpportunities) {
-      for (const ingredient of opp.ingredients.slice(0, 2)) {
         keywords.add(ingredient.toLowerCase().trim());
       }
     }

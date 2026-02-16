@@ -27,7 +27,7 @@ function SignInContent() {
             Welcome back
           </h1>
           <p className="text-gray-500 text-center mb-8">
-            Sign in to track opportunities and contribute to the community
+            Sign in to unlock full insights and trending data
           </p>
 
           {error && (
@@ -81,19 +81,19 @@ function SignInContent() {
                 <svg className="w-4 h-4 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Track recipe opportunities
+                Unlimited searches with full analytics
               </li>
               <li className="flex items-center gap-2 text-sm text-gray-600">
                 <svg className="w-4 h-4 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Contribute ingredient corrections
+                Ingredient gap analysis & content angles
               </li>
               <li className="flex items-center gap-2 text-sm text-gray-600">
                 <svg className="w-4 h-4 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Report outcomes & earn badges
+                Trending ingredients & search insights
               </li>
             </ul>
           </div>

@@ -16,7 +16,6 @@ async function main(): Promise<void> {
 
   // Core data tables
   const [
-    outcomes,
     ingredientTrends,
     googleTrends,
     googleTrendRelated,
@@ -24,7 +23,6 @@ async function main(): Promise<void> {
     ingredients,
     searches,
   ] = await Promise.all([
-    prisma.outcome.count(),
     prisma.ingredientTrend.count(),
     prisma.googleTrend.count(),
     prisma.googleTrendRelatedQuery.count(),
@@ -34,7 +32,6 @@ async function main(): Promise<void> {
   ]);
 
   console.log('--- Core Training Data ---');
-  console.log(`  Outcomes: ${outcomes}`);
   console.log(`  Ingredient Trends: ${ingredientTrends}`);
 
   console.log('\n--- Google Trends Data ---');
@@ -48,12 +45,6 @@ async function main(): Promise<void> {
 
   // ML Readiness Assessment
   console.log('\n--- ML Readiness Assessment ---');
-
-  if (outcomes >= 200) {
-    console.log('  ✓ Opportunity Success Predictor: READY (200+ outcomes)');
-  } else {
-    console.log(`  ✗ Opportunity Success Predictor: Need ${200 - outcomes} more outcomes`);
-  }
 
   // Check Google Trends date range
   const trendsDateRange = await prisma.googleTrend.aggregate({

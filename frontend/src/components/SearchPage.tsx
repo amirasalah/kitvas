@@ -223,7 +223,6 @@ export function SearchPage() {
             demand={searchQuery.data.demand}
             demandSignal={searchQuery.data.demandSignal}
             rateLimitRemaining={searchQuery.data.rateLimitRemaining}
-            opportunities={searchQuery.data.opportunities}
             ingredients={ingredients}
             onAddIngredient={(ing) => {
                 const newIngredients = [...ingredients, ing]
@@ -248,7 +247,7 @@ export function SearchPage() {
               You've used your {GUEST_SEARCH_LIMIT} free searches
             </h2>
             <p className="text-gray-600 mb-6">
-              Sign in to get unlimited searches, track opportunities, and access full trending data.
+              Sign in to get unlimited searches and access full trending data.
             </p>
             <Link
               href="/auth/signin"

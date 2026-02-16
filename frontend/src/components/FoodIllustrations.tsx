@@ -224,7 +224,7 @@ export function HeroFoodDecorations() {
 }
 
 // Empty state illustration
-export function EmptyStateIllustration({ type = 'search' }: { type?: 'search' | 'opportunities' | 'videos' }) {
+export function EmptyStateIllustration({ type = 'search' }: { type?: 'search' | 'videos' }) {
   const icons = {
     search: (
       <div className="relative animate-float-slow">
@@ -232,16 +232,6 @@ export function EmptyStateIllustration({ type = 'search' }: { type?: 'search' | 
         <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
           <svg className="w-6 h-6 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
-      </div>
-    ),
-    opportunities: (
-      <div className="relative animate-float-slow">
-        <CupcakeIcon className="w-32 h-32 text-rose-300" />
-        <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-          <svg className="w-6 h-6 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
       </div>

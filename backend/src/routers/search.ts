@@ -611,7 +611,6 @@ export const searchRouter = t.router({
             contentGap: demandSignal.contentGap,
             confidence: demandSignal.confidence,
           },
-          opportunities: demandSignal.opportunities,
         };
       } catch (error) {
         console.error('Search error:', error);

@@ -23,8 +23,6 @@ model User {
   accounts              Account[]
   sessions              Session[]
   searches              Search[]
-  trackedOpportunities  TrackedOpportunity[]
-  outcomes              Outcome[]
 
   @@index([email])
 }
@@ -162,36 +160,6 @@ model Search {
 
   @@index([userId, createdAt])
   @@index([createdAt])
-}
-
-model TrackedOpportunity {
-  id              String   @id @default(cuid())
-  userId          String
-  ingredients     String[]
-  status          String   // 'researching' | 'filming' | 'published' | 'abandoned'
-  opportunityScore String // 'high' | 'medium' | 'low'
-  trackedAt       DateTime @default(now())
-  
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  outcomes Outcome[]
-  
-  @@index([userId, status])
-}
-
-model Outcome {
-  id                  String   @id @default(cuid())
-  trackedOpportunityId String
-  userId              String
-  videoUrl            String?
-  views7day           Int?
-  rating              Int?     // 1-5
-  reportedAt          DateTime @default(now())
-  
-  trackedOpportunity TrackedOpportunity @relation(fields: [trackedOpportunityId], references: [id], onDelete: Cascade)
-  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([trackedOpportunityId])
-  @@index([userId])
 }
 
 model DemandSignal {

@@ -6,7 +6,7 @@ import { CoffeeFooter } from '@/components/CoffeeFooter'
 
 export const metadata: Metadata = {
   title: 'Kitvas - Intelligence Platform for Food Content Creators',
-  description: 'Find recipe opportunities with ingredient-level intelligence',
+  description: 'Ingredient-level intelligence for food content creators',
 }
 
 export default function RootLayout({

@@ -9,7 +9,6 @@ import type {
   YouTubeVideoResult,
   DemandBand,
   DemandSignal,
-  ContentOpportunity,
 } from '@/lib/trpc'
 import { IngredientGaps } from './IngredientGaps'
 import { ContentAngles } from './ContentAngles'
@@ -21,7 +20,6 @@ interface SearchResultsProps {
   demand: DemandBand
   demandSignal?: DemandSignal
   rateLimitRemaining?: number
-  opportunities: ContentOpportunity[]
   ingredients: string[]
   onAddIngredient?: (ingredient: string) => void
 }
@@ -32,7 +30,6 @@ export function SearchResults({
   demand,
   demandSignal,
   rateLimitRemaining,
-  opportunities,
   ingredients,
   onAddIngredient,
 }: SearchResultsProps) {
@@ -43,7 +40,6 @@ export function SearchResults({
 
   // Count what's available for the gate banner
   const hasDemandDetails = demandSignal && (demandSignal.avgViews > 0 || demandSignal.contentGap)
-  const hasOpportunities = opportunities.length > 0
   const hasIngredientGaps = ingredients.length >= 1
 
   if (hasNoResults) {
@@ -71,7 +67,7 @@ export function SearchResults({
       />
 
       {/* Premium Insights Section - Unified gate for non-logged-in users */}
-      {!isLoggedIn && !isLoading && (hasDemandDetails || hasOpportunities || hasIngredientGaps) && (
+      {!isLoggedIn && !isLoading && (hasDemandDetails || hasIngredientGaps) && (
         <div className="relative">
           {/* Blurred content preview */}
           <div className="blur-md select-none pointer-events-none space-y-6">
@@ -122,22 +118,6 @@ export function SearchResults({
               </div>
             )}
 
-            {/* Opportunities Preview */}
-            {hasOpportunities && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-green-100"></div>
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900">Opportunities</h2>
-                    <p className="text-sm text-gray-500">Content gaps you could fill</p>
-                  </div>
-                </div>
-                <div className="p-4 rounded-xl border-l-4 border-l-green-500 bg-green-50">
-                  <p className="font-semibold text-gray-900">Quick weeknight dinner version</p>
-                  <p className="text-sm text-gray-600">Most videos are 20+ min. A 10-min version could fill this gap.</p>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Overlay with CTA Banner */}
@@ -165,14 +145,6 @@ export function SearchResults({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     <span>Ingredient suggestions with gap scores</span>
-                  </li>
-                )}
-                {hasOpportunities && (
-                  <li className="flex items-center gap-2 text-gray-700">
-                    <svg className="w-5 h-5 text-[#10B981] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>{opportunities.length} content {opportunities.length === 1 ? 'opportunity' : 'opportunities'} to explore</span>
                   </li>
                 )}
               </ul>
@@ -231,31 +203,6 @@ export function SearchResults({
             </section>
           )}
 
-          {/* Opportunities Section — filter out contradictory breakouts with no actual growth */}
-          {opportunities.filter(opp =>
-            !(opp.type === 'google_breakout' && opp.description?.includes('+0%'))
-          ).length > 0 && (
-            <section>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Opportunities</h2>
-                  <p className="text-sm text-gray-500">Content gaps you could fill</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {opportunities
-                  .filter(opp => !(opp.type === 'google_breakout' && opp.description?.includes('+0%')))
-                  .map((opp, index) => (
-                    <OpportunityCard key={index} opportunity={opp} ingredients={ingredients} />
-                  ))}
-              </div>
-            </section>
-          )}
         </>
       )}
 
@@ -776,83 +723,3 @@ function TranscriptPanel({ videoId }: { videoId: string }) {
   )
 }
 
-function OpportunityCard({
-  opportunity,
-  ingredients,
-}: {
-  opportunity: ContentOpportunity
-  ingredients: string[]
-}) {
-  const [trackFeedback, setTrackFeedback] = useState<string | null>(null)
-
-  const trackMutation = trpc.opportunities.track.useMutation({
-    onSuccess: (data) => {
-      setTrackFeedback(data.message)
-      setTimeout(() => setTrackFeedback(null), 4000)
-    },
-    onError: (error) => {
-      setTrackFeedback(`Error: ${error.message}`)
-      setTimeout(() => setTrackFeedback(null), 4000)
-    },
-  })
-
-  const handleTrack = () => {
-    trackMutation.mutate({
-      ingredients,
-      opportunityScore: opportunity.priority,
-      opportunityType: opportunity.type,
-      title: opportunity.title,
-    })
-  }
-
-  const priorityConfig = {
-    high: { border: 'border-l-green-500', bg: 'bg-green-50', badge: 'bg-green-100 text-green-700' },
-    medium: { border: 'border-l-amber-500', bg: 'bg-amber-50', badge: 'bg-amber-100 text-amber-700' },
-    low: { border: 'border-l-gray-400', bg: 'bg-gray-50', badge: 'bg-gray-100 text-gray-600' },
-  }
-
-  const config = priorityConfig[opportunity.priority]
-
-  return (
-    <div className={`p-4 rounded-xl border-l-4 ${config.border} ${config.bg}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <p className="font-semibold text-gray-900">{opportunity.title}</p>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${config.badge}`}>
-              {opportunity.priority}
-            </span>
-          </div>
-          <p className="text-sm text-gray-600">{opportunity.description}</p>
-        </div>
-        <button
-          onClick={handleTrack}
-          disabled={trackMutation.isPending}
-          className="btn-primary text-sm px-4 py-2 flex-shrink-0"
-        >
-          {trackMutation.isPending ? (
-            <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
-          ) : (
-            'Track'
-          )}
-        </button>
-      </div>
-      {trackFeedback && (
-        <div className={`mt-3 text-xs p-2 rounded-lg flex items-center justify-between gap-2 ${
-          trackFeedback.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
-        }`}>
-          <span>{trackFeedback}</span>
-          <button
-            onClick={() => setTrackFeedback(null)}
-            className="p-0.5 hover:bg-black/10 rounded transition-colors flex-shrink-0"
-            aria-label="Dismiss"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}

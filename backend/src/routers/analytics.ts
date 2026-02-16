@@ -362,12 +362,10 @@ export const analyticsRouter = t.router({
     // Parallel queries for dashboard data
     const [
       weeklySearches,
-      weeklyOutcomes,
       topTrending,
       topGaps,
     ] = await Promise.all([
       ctx.prisma.search.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
-      ctx.prisma.outcome.count({ where: { reportedAt: { gte: sevenDaysAgo } } }),
       // Top 5 trending (simplified)
       ctx.prisma.search.findMany({
         where: { createdAt: { gte: sevenDaysAgo } },
@@ -397,7 +395,6 @@ export const analyticsRouter = t.router({
     return {
       weeklyStats: {
         searches: weeklySearches,
-        outcomes: weeklyOutcomes,
       },
       trending,
       topGaps: topGaps.map((g) => ({

@@ -7,8 +7,6 @@ import type { YouTubeVideo } from './youtube.js';
 
 export type DemandBand = 'hot' | 'growing' | 'stable' | 'niche' | 'unknown';
 export type ContentGapType = 'underserved' | 'saturated' | 'balanced' | 'emerging';
-export type OpportunityType = 'quality_gap' | 'freshness_gap' | 'underserved' | 'trending' | 'google_breakout' | 'velocity_mismatch';
-export type OpportunityPriority = 'high' | 'medium' | 'low';
 
 export interface MarketMetrics {
   totalViews: number;
@@ -22,13 +20,6 @@ export interface ContentGap {
   score: number;
   type: ContentGapType;
   reasoning: string;
-}
-
-export interface ContentOpportunity {
-  type: OpportunityType;
-  title: string;
-  description: string;
-  priority: OpportunityPriority;
 }
 
 export interface QualityDistribution {
@@ -55,7 +46,6 @@ export interface YouTubeDemandSignal {
   demandBand: DemandBand;
   marketMetrics: MarketMetrics;
   contentGap: ContentGap;
-  opportunities: ContentOpportunity[];
   confidence: number;
   sampleSize: number;
   trendsBoost?: TrendsBoost;
@@ -709,94 +699,6 @@ function calculateDemandScore(
   return { score, band };
 }
 
-function generateOpportunities(
-  metrics: MarketMetrics,
-  quality: QualityDistribution,
-  freshness: FreshnessAnalysis,
-  gap: ContentGap,
-  trendsBoost?: TrendsBoost
-): ContentOpportunity[] {
-  const opportunities: ContentOpportunity[] = [];
-
-  // IMPORTANT: Don't show opportunity flags for saturated markets
-  const isSaturated = gap.type === 'saturated';
-
-  // Quality gap opportunity - only if market is NOT saturated
-  if (!isSaturated && quality.outlierRatio > 15 && quality.bottomPerformerViews < quality.topPerformerViews * 0.1) {
-    opportunities.push({
-      type: 'quality_gap',
-      title: 'Quality Opportunity',
-      description: `Top videos average ${formatViews(quality.topPerformerViews)} views while most get ${formatViews(quality.bottomPerformerViews)}. High-quality content could capture significant audience.`,
-      priority: quality.outlierRatio > 25 ? 'high' : 'medium',
-    });
-  }
-
-  // Freshness gap opportunity - ONLY for non-saturated markets with genuine opportunity
-  // The gap.type check is critical: saturated markets should NEVER show this
-  if (!isSaturated && gap.type !== 'balanced' && freshness.recentVideoCount < 3 && metrics.avgViews > 30000 && metrics.avgViews < 300000 && metrics.videoCount < 15) {
-    opportunities.push({
-      type: 'freshness_gap',
-      title: 'Content Freshness Gap',
-      description: `Few recent uploads among top-ranking videos (${freshness.recentVideoCount} of ${metrics.videoCount} from last 90 days). With ${formatViews(metrics.avgViews)} avg views, new quality content could rank well.`,
-      priority: 'high',
-    });
-  }
-
-  // Underserved market opportunity - gap.type already computed with barrier/opportunity model
-  if (gap.type === 'underserved') {
-    opportunities.push({
-      type: 'underserved',
-      title: 'Good Opportunity',
-      description: gap.reasoning,
-      priority: 'high',
-    });
-  }
-
-  // Emerging trend opportunity
-  if (gap.type === 'emerging') {
-    opportunities.push({
-      type: 'trending',
-      title: 'Emerging Trend',
-      description: gap.reasoning,
-      priority: 'high',
-    });
-  }
-
-  // Trending topic based on freshness (backup if not already flagged as emerging)
-  if (!isSaturated && gap.type !== 'emerging' && freshness.isEmergingTopic && freshness.recentVideoAvgViews > 10000) {
-    opportunities.push({
-      type: 'trending',
-      title: 'Growing Topic',
-      description: `${freshness.recentVideoCount} recent videos averaging ${formatViews(freshness.recentVideoAvgViews)} views. This topic is gaining momentum.`,
-      priority: 'medium',
-    });
-  }
-
-  // Google Trends breakout opportunity
-  // Only show if isBreakout AND the growth data supports it (>10% minimum)
-  // This prevents misleading "+0% week-over-week" breakout messages
-  if (trendsBoost?.isBreakout && trendsBoost.weekOverWeekGrowth > 10) {
-    opportunities.push({
-      type: 'google_breakout',
-      title: 'Google Trends Breakout',
-      description: `This ingredient is experiencing explosive growth on Google (${trendsBoost.weekOverWeekGrowth > 100 ? '>100%' : `+${Math.round(trendsBoost.weekOverWeekGrowth)}%`} week-over-week). First-mover advantage available.`,
-      priority: 'high',
-    });
-  }
-
-  // Velocity mismatch: Google trending faster than YouTube supply
-  if (trendsBoost && trendsBoost.weekOverWeekGrowth > 30 && freshness.recentVideoCount < 5 && !trendsBoost.isBreakout) {
-    opportunities.push({
-      type: 'velocity_mismatch',
-      title: 'Search Demand Outpacing Content',
-      description: `Google searches growing +${Math.round(trendsBoost.weekOverWeekGrowth)}% but only ${freshness.recentVideoCount} new videos in 90 days. Supply gap widening.`,
-      priority: 'high',
-    });
-  }
-
-  return opportunities;
-}
-
 function createUnknownSignal(): YouTubeDemandSignal {
   return {
     demandScore: 0,
@@ -813,7 +715,6 @@ function createUnknownSignal(): YouTubeDemandSignal {
       type: 'balanced',
       reasoning: 'Insufficient data to analyze demand.',
     },
-    opportunities: [],
     confidence: 0,
     sampleSize: 0,
   };
@@ -878,12 +779,6 @@ export function calculateYouTubeDemandSignal(
           ? `Only ${relevantVideos.length} video${relevantVideos.length > 1 ? 's' : ''} found for this combination. Potential opportunity.`
           : 'No videos found for this specific combination.',
       },
-      opportunities: relevantVideos.length > 0 ? [{
-        type: 'underserved' as OpportunityType,
-        title: 'Untapped Combination',
-        description: `Very few videos exist for this ingredient combination. This could be a unique content opportunity.`,
-        priority: 'high' as OpportunityPriority,
-      }] : [],
       sampleSize: relevantVideos.length,
     };
   }
@@ -916,12 +811,6 @@ export function calculateYouTubeDemandSignal(
         type: 'underserved',
         reasoning: `Unproven combination - only ${relevantVideos.length} videos partially match (avg ${Math.round(avgRelevance * 100)}% ingredient match). No established content for this specific combination.`,
       },
-      opportunities: [{
-        type: 'underserved' as OpportunityType,
-        title: 'Unproven Combination',
-        description: `This specific ingredient combination has no dedicated content. Could be a unique niche or simply unusual pairing.`,
-        priority: 'medium' as OpportunityPriority,
-      }],
       sampleSize: relevantVideos.length,
       confidence: 0.3, // Low confidence due to unproven nature
     };
@@ -930,7 +819,6 @@ export function calculateYouTubeDemandSignal(
   // Pass ingredient count and sample size for niche advantage calculation in opportunity score
   const contentGap = calculateContentGap(marketMetrics, qualityDistribution, freshnessAnalysis, ingredients.length, relevantVideos.length, trendsBoost);
   const { score, band } = calculateDemandScore(marketMetrics, contentGap, freshnessAnalysis, trendsBoost);
-  const opportunities = generateOpportunities(marketMetrics, qualityDistribution, freshnessAnalysis, contentGap, trendsBoost);
 
   // Confidence calculation:
   // - Base confidence from sample size (up to 0.6)
@@ -961,7 +849,6 @@ export function calculateYouTubeDemandSignal(
     demandBand: band,
     marketMetrics,
     contentGap,
-    opportunities,
     confidence,
     sampleSize: relevantVideos.length,
     trendsBoost,
