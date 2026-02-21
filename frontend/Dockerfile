@@ -1,4 +1,5 @@
 FROM node:20-alpine AS base
+RUN apk add --no-cache libc6-compat
 
 # --- Dependencies ---
 FROM base AS deps
@@ -30,17 +31,13 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
-
 # Copy standalone output (includes minimal node_modules + server.js)
-COPY --from=builder --chown=nextjs:nodejs /app/frontend/.next/standalone ./
+COPY --from=builder /app/frontend/.next/standalone ./
 
 # Copy public assets and static files (not included in standalone)
-COPY --from=builder --chown=nextjs:nodejs /app/frontend/public ./frontend/public
-COPY --from=builder --chown=nextjs:nodejs /app/frontend/.next/static ./frontend/.next/static
+COPY --from=builder /app/frontend/public ./frontend/public
+COPY --from=builder /app/frontend/.next/static ./frontend/.next/static
 
-USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
