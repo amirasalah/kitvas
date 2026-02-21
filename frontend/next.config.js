@@ -1,8 +1,13 @@
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   transpilePackages: ['@kitvas/shared'],
+  turbopack: {
+    root: path.join(__dirname, '..'),
+  },
   images: {
     remotePatterns: [
       {
