@@ -13,6 +13,7 @@ RUN npm ci
 FROM deps AS builder
 COPY frontend/ ./frontend/
 COPY shared/ ./shared/
+COPY backend/src/ ./backend/src/
 
 # Next.js public env vars must be present at build time
 ARG NEXT_PUBLIC_API_URL
