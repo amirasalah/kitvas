@@ -66,7 +66,7 @@ export function SearchResults({
         showDetails={isLoggedIn}
       />
 
-      {/* Premium Insights Section - Unified gate for non-logged-in users */}
+      {/* Insights Section - Unified gate for non-logged-in users */}
       {!isLoggedIn && !isLoading && (hasDemandDetails || hasIngredientGaps) && (
         <div className="relative">
           {/* Blurred content preview */}

@@ -55,11 +55,10 @@ Kitvas uses **NextAuth v5 (beta.30)** with Google OAuth for authentication. The 
 
 ### Procedure Authorization
 
-All current tRPC procedures are public (no auth required). The auth infrastructure (`protectedProcedure`, `adminProcedure`) exists in `backend/src/trpc.ts` for future use when Pro tier features are added.
-
-| Procedure Type | Access Level | Current Usage |
-|---------------|-------------|---------------|
-| `t.procedure` (public) | Anyone | All current endpoints: search, autocomplete, analytics, gaps |
+| Procedure Type | Access Level | Usage |
+|---------------|-------------|-------|
+| `t.procedure` (public) | Anyone | Search, autocomplete, analytics, gaps |
+| `protectedProcedure` | Signed-in users | Alerts (getStatus, subscribe, unsubscribe) |
 
 ## Security Best Practices
 

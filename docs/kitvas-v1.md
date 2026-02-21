@@ -115,7 +115,7 @@ kitvas/
 ├── backend/
 │   ├── src/
 │   │   ├── index.ts              # Hono server entry
-│   │   ├── router.ts             # tRPC app router (search, analytics, gaps)
+│   │   ├── router.ts             # tRPC app router (search, analytics, gaps, alerts)
 │   │   ├── trpc.ts               # tRPC base, procedures (public, protected)
 │   │   ├── routers/
 │   │   │   ├── search.ts         # Search + autocomplete + transcripts
@@ -271,7 +271,7 @@ kitvas/
 | **ContentAngles** | Rising queries and angle suggestions |
 | **TrendingIngredients** | Google Trends powered trending ingredient pills |
 | **IngredientTrendSparkline** | Mini charts for ingredient search/video volume |
-| **Navbar** | Logo, auth status, user dropdown with sign out |
+| **Navbar** | Logo, auth status, user dropdown with alert toggle and sign out |
 | **LoginGate** | Blurs content behind sign-in prompt |
 | **HeroFoodDecorations** | Animated SVG food illustrations |
 | **CoffeeFooter** | Support/donation footer |
@@ -299,10 +299,11 @@ kitvas/
 
 ## 7. Data Models
 
-### 7.1 Core Models (16 total)
+### 7.1 Core Models (18 total)
 
 **Auth & Users:**
-- `User` — Accounts with subscription tier (free/pro)
+
+- `User` — Accounts (Google OAuth)
 - `Account` — OAuth account linking (Google)
 - `Session` — Auth session management
 - `VerificationToken` — Email verification
@@ -327,7 +328,13 @@ kitvas/
 - `GoogleTrendsCache` — API response cache with TTL
 - `GoogleTrendsJobLog` — Job execution tracking
 
+**Alerts:**
+
+- `AlertSubscription` — User email alert preferences
+- `SentAlert` — Sent alert deduplication log
+
 **Job Management:**
+
 - `IngredientFetchJob` — External source ingestion tracking
 
 ---
@@ -353,16 +360,20 @@ appRouter
 │   ├── dashboard             (public)  — Summary for insights UI
 │   ├── ingredientTrends      (public)  — Sparkline data
 │   └── topIngredientTrends   (public)  — Top ingredients by velocity
-└── gaps
-    └── findGaps              (public)  — Content gap analysis
+├── gaps
+│   └── findGaps              (public)  — Content gap analysis
+└── alerts
+    ├── getStatus             (protected) — Current alert subscription status
+    ├── subscribe             (protected) — Enable breakout email alerts
+    └── unsubscribe           (protected) — Disable email alerts
 ```
 
 ### 8.2 Auth Procedures
 
 | Procedure Type | Usage |
 |---------------|-------|
-| `t.procedure` (public) | All current endpoints — search, analytics, gaps |
-| `protectedProcedure` | Available but currently unused (reserved for future features) |
+| `t.procedure` (public) | Search, analytics, gaps |
+| `protectedProcedure` | Alerts (getStatus, subscribe, unsubscribe) |
 
 ---
 
@@ -411,6 +422,9 @@ YOUTUBE_API_KEY                  # YouTube Data API v3 key
 GROQ_API_KEY                     # Groq API key for LLM extraction
 AUTH_SECRET                      # Same as frontend (for JWE decryption)
 INTERNAL_BROADCAST_SECRET        # SSE broadcast authentication
+RESEND_API_KEY                   # Resend API key for email alerts (optional)
+ALERT_FROM_EMAIL                 # Sender address for alerts (optional)
+ALLOWED_ORIGINS                  # Comma-separated production origins for CORS
 ```
 
 ---
@@ -419,7 +433,7 @@ INTERNAL_BROADCAST_SECRET        # SSE broadcast authentication
 
 ### 10.1 Auth Flow
 
-1. User clicks "Sign in with Google" → NextAuth initiates Google OAuth with YouTube read-only scope
+1. User clicks "Sign in with Google" → NextAuth initiates Google OAuth
 2. NextAuth v5 creates JWE-encrypted session token (NOT signed JWT)
 3. Frontend stores token in cookie (`authjs.session-token` in dev, `__Secure-authjs.session-token` in prod)
 4. Frontend sends token via `Authorization: Bearer <token>` in tRPC requests
@@ -441,14 +455,13 @@ INTERNAL_BROADCAST_SECRET        # SSE broadcast authentication
 | Tier | Price | Features |
 |------|-------|----------|
 | **Guest** | Free | 2 searches per session, basic results |
-| **Signed In** | Free | Unlimited searches, full demand signals, trending data, gaps |
-| **Pro** | $12/month (planned) | Channel benchmarking, personalized recommendations |
+| **Signed In** | Free | Unlimited searches, full demand signals, trending data, gaps, breakout alerts |
 
 ### 11.2 Monetization Strategy
 
-- Phase 1 (current): Free with sign-in gate to build user base and data
-- Phase 2 (planned): Pro tier with YouTube channel benchmarking
-- Support: Optional coffee/donation link in footer
+- All features are free and open source (MIT license)
+- Voluntary donations via Stripe Payment Link ("Buy me a coffee")
+- No subscription tiers or paywalled features
 
 ---
 
@@ -503,24 +516,15 @@ INTERNAL_BROADCAST_SECRET        # SSE broadcast authentication
 
 ## 14. Future Roadmap
 
-### 14.1 Near-Term (V1.1)
+### 14.1 Recently Shipped
 
 | Feature | Description |
 |---------|-------------|
-| Channel Benchmarking | Connect YouTube channel, see how your videos compare by ingredient |
-| Pro Tier + Stripe | $12/month subscription with Stripe billing |
-| Personalized Recommendations | Suggest ingredients based on channel history |
+| Breakout Email Alerts | Email notifications when ingredients experience >5000% growth on Google Trends |
+| Open Source (MIT) | Full codebase open sourced |
+| Donations | Stripe Payment Link for voluntary support |
 
-### 14.2 Medium-Term (V1.2+)
-
-| Feature | Description |
-|---------|-------------|
-| TikTok/Instagram Support | Expand beyond YouTube |
-| Creator Following | Social graph and shared intelligence |
-| Recipe Brief Templates | Downloadable research briefs |
-| Notification Alerts | Email/push for trending ingredients in your niche |
-
-### 14.3 Removed Features (Previously Planned)
+### 14.2 Removed Features (Previously Planned)
 
 The following features were designed in earlier PRD versions but removed during development to focus the product:
 
@@ -531,6 +535,9 @@ The following features were designed in earlier PRD versions but removed during 
 | Admin Labeling Panel | Unnecessary complexity |
 | Gamification / Badges | No user base to gamify yet |
 | Opportunity Accuracy Scores | Requires outcome data that doesn't exist yet |
+| Pro Tier / Subscriptions | Pivoted to free + open source model |
+| Channel Benchmarking | Requires YouTube channel OAuth scope — deferred |
+| TikTok/Instagram Support | Deferred — focus on YouTube first |
 
 These may be revisited once the core search + demand intelligence product has proven traction.
 
@@ -543,7 +550,7 @@ These may be revisited once the core search + demand intelligence product has pr
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | Creators don't value ingredient-level data | Critical | Validate with beta users, iterate on value prop |
-| Free tier too generous | High | Sign-in gate provides data; Pro tier coming |
+| Free tier too generous | Low | All features free; sign-in gate provides user data for trends |
 | Search results not accurate enough | High | Groq LLM extraction + synonym database + continuous vocabulary expansion |
 
 ### 15.2 Technical Risks

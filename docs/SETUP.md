@@ -41,10 +41,10 @@ This will install dependencies for all workspaces (frontend, backend, shared).
 #### Backend (`backend/.env`)
 ```
 DATABASE_URL="postgresql://..."
-REDIS_URL="redis://..." (optional for now)
 GROQ_API_KEY="gsk_..." (for ingredient extraction - free tier available at console.groq.com)
 YOUTUBE_API_KEY="AIza..." (for YouTube search)
 AUTH_SECRET="your-nextauth-secret" (same value as frontend, for JWT verification)
+RESEND_API_KEY="" (optional - for breakout email alerts, get from resend.com)
 PORT=4001
 ENVIRONMENT=development
 ```
@@ -101,8 +101,8 @@ kitvas/
 ✅ **Shipped:**
 - Project structure (monorepo with frontend, backend, shared)
 - Next.js 14 frontend with App Router
-- Hono backend with tRPC (3 routers: search, analytics, gaps)
-- Prisma schema with 16 models
+- Hono backend with tRPC (4 routers: search, analytics, gaps, alerts)
+- Prisma schema with 18 models
 - YouTube API integration with inline extraction
 - Ingredient extraction (Groq LLM + keyword fallback)
 - Ingredient synonym mapping & normalization (100+ canonical forms)
@@ -116,11 +116,9 @@ kitvas/
 - Hot Ingredients UI (trending ingredients display)
 - Authentication (NextAuth v5 + Google OAuth, JWE token verification)
 - Guest/signed-in feature gating
-
-📋 **Remaining:**
-- Stripe integration for subscriptions
-- Pro tier feature enforcement
-- Production deployment
+- Breakout ingredient email alerts (Resend)
+- Donation support (Stripe Payment Link)
+- Open source (MIT license)
 
 ## 5. Ingest Videos from YouTube
 

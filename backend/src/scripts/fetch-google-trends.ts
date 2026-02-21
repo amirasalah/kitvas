@@ -14,6 +14,7 @@
 import { config } from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { GoogleTrendsFetcher } from '../lib/google-trends/index.js';
+import { sendBreakoutAlert } from '../lib/email/resend.js';
 
 config();
 
@@ -111,13 +112,16 @@ async function runTrendsFetch(): Promise<void> {
       console.log(`   Top discoveries: ${discoveries.slice(0, 5).join(', ')}\n`);
     }
 
-    // Step 4: Report breakouts
+    // Step 4: Report breakouts and send email alerts
     if (stats.breakoutsFound.length > 0) {
       console.log('🔥 BREAKOUT TRENDS DETECTED:');
       for (const keyword of stats.breakoutsFound) {
         console.log(`   - ${keyword}`);
       }
       console.log('');
+
+      // Send email alerts to subscribed users
+      await sendBreakoutAlerts(stats.breakoutsFound);
     }
 
     // Summary
@@ -143,6 +147,49 @@ async function runTrendsFetch(): Promise<void> {
     process.exit(1);
   } finally {
     await prisma.$disconnect();
+  }
+}
+
+async function sendBreakoutAlerts(ingredients: string[]): Promise<void> {
+  try {
+    // Find users with alerts enabled
+    const subscribers = await prisma.alertSubscription.findMany({
+      where: { enabled: true },
+      include: { user: { select: { email: true, id: true } } },
+    });
+
+    if (subscribers.length === 0) {
+      console.log('📧 No alert subscribers — skipping email alerts');
+      return;
+    }
+
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    let sentCount = 0;
+
+    for (const sub of subscribers) {
+      // Check if we already sent an alert for these ingredients in the last 24h
+      const recentAlert = await prisma.sentAlert.findFirst({
+        where: {
+          userId: sub.user.id,
+          sentAt: { gte: twentyFourHoursAgo },
+          ingredients: { hasSome: ingredients },
+        },
+      });
+
+      if (recentAlert) continue;
+
+      const success = await sendBreakoutAlert(sub.user.email, ingredients);
+      if (success) {
+        await prisma.sentAlert.create({
+          data: { userId: sub.user.id, ingredients },
+        });
+        sentCount++;
+      }
+    }
+
+    console.log(`📧 Sent breakout alerts to ${sentCount}/${subscribers.length} subscriber(s)`);
+  } catch (error) {
+    console.error('⚠️  Failed to send breakout alerts:', error);
   }
 }
 

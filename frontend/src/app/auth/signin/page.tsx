@@ -56,23 +56,6 @@ function SignInContent() {
             <span className="text-gray-700 font-medium">Continue with Google</span>
           </button>
 
-          {/* YouTube Access Notice */}
-          <div className="mt-6 p-4 bg-[#10B981]/5 border border-[#10B981]/20 rounded-xl">
-            <div className="flex gap-3">
-              <div className="flex-shrink-0">
-                <svg className="w-5 h-5 text-[#10B981]" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">YouTube Channel Access</p>
-                <p className="text-xs text-gray-600 mt-1">
-                  We request read-only access to your YouTube channel for performance benchmarking (Pro feature).
-                </p>
-              </div>
-            </div>
-          </div>
-
           {/* Benefits */}
           <div className="mt-8 space-y-3">
             <p className="text-sm font-medium text-gray-700">By signing in, you can:</p>
@@ -94,6 +77,12 @@ function SignInContent() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 Trending ingredients & search insights
+              </li>
+              <li className="flex items-center gap-2 text-sm text-gray-600">
+                <svg className="w-4 h-4 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Email alerts for breakout trending ingredients
               </li>
             </ul>
           </div>

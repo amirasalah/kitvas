@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 import { useState } from 'react'
+import { AlertToggle } from './AlertToggle'
 
 export function Navbar() {
   const { data: session, status } = useSession()
@@ -65,6 +66,7 @@ export function Navbar() {
                           {session.user?.email}
                         </p>
                       </div>
+                      <AlertToggle />
                       <button
                         onClick={() => signOut()}
                         className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"

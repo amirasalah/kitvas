@@ -16,16 +16,24 @@ const prisma = new PrismaClient();
 const app = new Hono();
 
 // Enable CORS for frontend
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+  : [];
+
 app.use('/*', cors({
   origin: (origin) => {
     // Allow localhost on any port for development
     if (!origin || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
       return origin || '*';
     }
+    // Allow configured production origins
+    if (allowedOrigins.includes(origin)) {
+      return origin;
+    }
     return null;
   },
   allowMethods: ['GET', 'POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'trpc-batch-mode', 'X-Internal-Secret'],
+  allowHeaders: ['Content-Type', 'Authorization', 'trpc-batch-mode', 'X-Internal-Secret'],
   exposeHeaders: ['Content-Length'],
   credentials: true,
 }));
