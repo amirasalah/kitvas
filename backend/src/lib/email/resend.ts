@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { logger } from '../logger.js';
 
 const resendApiKey = process.env.RESEND_API_KEY;
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
@@ -10,7 +11,7 @@ export async function sendBreakoutAlert(
   ingredients: string[]
 ): Promise<boolean> {
   if (!resend) {
-    console.warn('⚠️  RESEND_API_KEY not set — skipping email alert');
+    logger.warn('RESEND_API_KEY not set — skipping email alert');
     return false;
   }
 
@@ -42,7 +43,7 @@ export async function sendBreakoutAlert(
   });
 
   if (error) {
-    console.error(`Failed to send alert to ${email}:`, error);
+    logger.error(`Failed to send alert to ${email}`, { error: error.message });
     return false;
   }
 

@@ -7,9 +7,9 @@
 import type { PrismaClient } from '@prisma/client';
 import type { YouTubeVideo } from './youtube.js';
 import { processVideoIngredients } from './ingredient-extractor.js';
-import { getVideoDetails } from './youtube.js';
 import { fetchTranscript } from './transcript-fetcher.js';
 import { detectAndTranslate } from './translator.js';
+import { logger } from './logger.js';
 
 interface QueuedVideo {
   youtubeId: string;
@@ -134,7 +134,7 @@ async function processNextVideo(prisma: PrismaClient): Promise<boolean> {
       extractionTranscript || transcript
     );
 
-    console.log(`[Queue] Processed ${video.youtubeId}: "${video.title.slice(0, 50)}..." - ${ingredientCount} ingredients`);
+    logger.info(`Queue processed ${video.youtubeId}`, { title: video.title.slice(0, 50), ingredients: ingredientCount });
     processedIds.add(video.youtubeId);
     return true;
   } catch (error) {
@@ -144,7 +144,7 @@ async function processNextVideo(prisma: PrismaClient): Promise<boolean> {
       return true;
     }
 
-    console.error(`[Queue] Failed to process ${video.youtubeId}:`, error);
+    logger.error(`Queue failed to process ${video.youtubeId}`, { error: error instanceof Error ? error.message : String(error) });
     return false;
   }
 }
@@ -158,7 +158,7 @@ export function startExtractionWorker(prisma: PrismaClient): void {
     return; // Already running
   }
 
-  console.log('[Queue] Starting extraction worker...');
+  logger.info('Starting extraction worker');
 
   workerInterval = setInterval(async () => {
     if (isProcessing || queue.length === 0) {
@@ -181,7 +181,7 @@ export function stopExtractionWorker(): void {
   if (workerInterval) {
     clearInterval(workerInterval);
     workerInterval = null;
-    console.log('[Queue] Extraction worker stopped');
+    logger.info('Extraction worker stopped');
   }
 }
 

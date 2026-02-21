@@ -91,9 +91,9 @@ function SignInContent() {
         {/* Footer */}
         <p className="mt-6 text-center text-xs text-gray-500">
           By signing in, you agree to our{' '}
-          <a href="#" className="text-[#10B981] hover:underline">Terms of Service</a>
+          <Link href="/terms" className="text-[#10B981] hover:underline">Terms of Service</Link>
           {' '}and{' '}
-          <a href="#" className="text-[#10B981] hover:underline">Privacy Policy</a>
+          <Link href="/privacy" className="text-[#10B981] hover:underline">Privacy Policy</Link>
         </p>
       </div>
     </div>

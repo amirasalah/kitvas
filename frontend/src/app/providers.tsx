@@ -27,7 +27,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     trpc.createClient({
       links: [
         httpBatchLink({
-          url: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/trpc`,
+          url: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}/trpc`,
           headers() {
             const token = getSessionToken()
             return token ? { authorization: `Bearer ${token}` } : {}

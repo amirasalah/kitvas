@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Search filters', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/search');
+    await page.goto('/');
   });
 
   test('filter toggle button opens filter panel', async ({ page }) => {

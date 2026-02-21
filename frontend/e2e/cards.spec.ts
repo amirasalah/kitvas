@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Dashboard cards', () => {
   test('overview topic cards have expected content', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/dashboard');
 
     // Wait for either data or empty state
     await expect(
@@ -21,7 +21,7 @@ test.describe('Dashboard cards', () => {
   });
 
   test('YouTube video cards have thumbnails and titles', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/dashboard');
     await page.getByRole('button', { name: /YouTube/ }).click();
 
     await expect(
@@ -46,7 +46,7 @@ test.describe('Dashboard cards', () => {
   });
 
   test('Website article cards have source badge and title', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/dashboard');
     await page.getByRole('button', { name: /Websites/ }).click();
 
     await expect(
@@ -71,7 +71,7 @@ test.describe('Dashboard cards', () => {
   });
 
   test('overview summary shows stat cards when data exists', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/dashboard');
 
     await expect(
       page.getByText('Trending Topics').or(page.getByText('No trending data yet'))

@@ -3,6 +3,7 @@ import { jwtDecrypt } from 'jose';
 import { hkdf } from 'node:crypto';
 import { promisify } from 'node:util';
 import type { Context as HonoContext } from 'hono';
+import { logger } from './lib/logger.js';
 
 const prisma = new PrismaClient();
 const hkdfAsync = promisify(hkdf);
@@ -109,7 +110,10 @@ export async function createContext(_opts?: any, c?: HonoContext): Promise<Conte
       try {
         userId = await findOrCreateUser(payload);
       } catch (error) {
-        console.error('Failed to find/create user:', error);
+        logger.error('Failed to find/create user', {
+          email: payload.email,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
   }

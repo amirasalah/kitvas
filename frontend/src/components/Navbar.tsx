@@ -30,17 +30,17 @@ export function Navbar() {
                     : 'text-gray-600 hover:text-gray-900 hover:bg-white/30'
                 }`}
               >
-                Dashboard
+                Search
               </Link>
               <Link
-                href="/search"
+                href="/dashboard"
                 className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                  pathname === '/search'
+                  pathname === '/dashboard'
                     ? 'bg-white/60 text-gray-900'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-white/30'
                 }`}
               >
-                Search
+                Dashboard
               </Link>
             </div>
           </div>

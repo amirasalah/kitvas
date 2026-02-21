@@ -6,18 +6,19 @@
  */
 
 import type { SSEStreamingApi } from 'hono/streaming';
+import { logger } from './logger.js';
 
 class SSEBroadcaster {
   private connections = new Map<string, SSEStreamingApi>();
 
   addConnection(id: string, stream: SSEStreamingApi): void {
     this.connections.set(id, stream);
-    console.log(`[SSE] Client connected: ${id} (${this.connections.size} total)`);
+    logger.debug(`SSE client connected: ${id}`, { total: this.connections.size });
   }
 
   removeConnection(id: string): void {
     this.connections.delete(id);
-    console.log(`[SSE] Client disconnected: ${id} (${this.connections.size} total)`);
+    logger.debug(`SSE client disconnected: ${id}`, { total: this.connections.size });
   }
 
   async broadcast(event: string, data: unknown): Promise<void> {
@@ -27,7 +28,8 @@ class SSEBroadcaster {
     for (const [id, stream] of this.connections) {
       try {
         await stream.writeSSE({ event, data: payload });
-      } catch {
+      } catch (err) {
+        logger.warn(`SSE connection ${id} failed: ${err instanceof Error ? err.message : 'unknown error'}`);
         dead.push(id);
       }
     }
@@ -36,7 +38,7 @@ class SSEBroadcaster {
       this.connections.delete(id);
     }
 
-    console.log(`[SSE] Broadcast "${event}" to ${this.connections.size} clients (${dead.length} cleaned up)`);
+    logger.info(`SSE broadcast "${event}"`, { clients: this.connections.size, cleaned: dead.length });
   }
 
   getConnectionCount(): number {

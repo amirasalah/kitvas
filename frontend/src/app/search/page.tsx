@@ -1,5 +1,5 @@
-import { SearchPage } from '@/components/SearchPage'
+import { redirect } from 'next/navigation'
 
-export default function Search() {
-  return <SearchPage />
+export default function SearchRedirect() {
+  redirect('/')
 }

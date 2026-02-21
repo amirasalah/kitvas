@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Empty states and loading', () => {
   test('dashboard overview shows data or empty state', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/dashboard');
 
     // Wait for either data or empty state (not animate-pulse which persists in navbar)
     await expect(
@@ -15,7 +15,7 @@ test.describe('Empty states and loading', () => {
   });
 
   test('YouTube tab shows videos or empty state', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/dashboard');
     await page.getByRole('button', { name: /YouTube/ }).click();
 
     await expect(
@@ -28,7 +28,7 @@ test.describe('Empty states and loading', () => {
   });
 
   test('Websites tab shows articles or empty state', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/dashboard');
     await page.getByRole('button', { name: /Websites/ }).click();
 
     await expect(
@@ -41,7 +41,7 @@ test.describe('Empty states and loading', () => {
   });
 
   test('search page shows hero content before searching', async ({ page }) => {
-    await page.goto('/search');
+    await page.goto('/');
 
     // Pre-search state should show hero elements
     await expect(page.getByRole('heading', { name: /Discover Recipe/ })).toBeVisible();

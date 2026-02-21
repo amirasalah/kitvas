@@ -9,6 +9,22 @@ import { startExtractionWorker } from './lib/extraction-queue.js';
 import { broadcaster } from './lib/sse-broadcast.js';
 import { queryHotIngredients } from './lib/hot-ingredients-query.js';
 import { PrismaClient } from '@prisma/client';
+import { logger } from './lib/logger.js';
+
+// Validate required environment variables at startup
+const requiredEnvVars = ['DATABASE_URL', 'AUTH_SECRET'] as const;
+const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
+if (missingVars.length > 0) {
+  logger.error(`Missing required environment variables: ${missingVars.join(', ')}. See backend/.env.example`);
+  process.exit(1);
+}
+
+const optionalEnvVars = ['YOUTUBE_API_KEY', 'GROQ_API_KEY', 'INTERNAL_BROADCAST_SECRET', 'RESEND_API_KEY'] as const;
+for (const v of optionalEnvVars) {
+  if (!process.env[v]) {
+    logger.warn(`${v} not set — related features will be disabled`);
+  }
+}
 
 // Initialize Prisma for extraction worker
 const prisma = new PrismaClient();
@@ -19,6 +35,10 @@ const app = new Hono();
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
   : [];
+
+if (process.env.ENVIRONMENT === 'production' && allowedOrigins.length === 0) {
+  logger.warn('ALLOWED_ORIGINS not set in production — only localhost requests will be accepted');
+}
 
 app.use('/*', cors({
   origin: (origin) => {
@@ -104,7 +124,7 @@ serve({
   fetch: app.fetch,
   port,
 }, (info) => {
-  console.log(`🚀 Backend server running on http://localhost:${info.port}`);
+  logger.info(`Backend server running on http://localhost:${info.port}`, { port: info.port });
 
   // Start background extraction worker
   startExtractionWorker(prisma);

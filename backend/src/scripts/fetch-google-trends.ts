@@ -194,15 +194,25 @@ async function sendBreakoutAlerts(ingredients: string[]): Promise<void> {
 }
 
 async function triggerBroadcast(): Promise<void> {
-  const url = process.env.INTERNAL_BROADCAST_URL || 'http://localhost:4001/internal/broadcast-trends';
   const secret = process.env.INTERNAL_BROADCAST_SECRET;
   if (!secret) {
     console.log('\n⚠️  INTERNAL_BROADCAST_SECRET not set — skipping SSE broadcast');
     return;
   }
 
+  const url = process.env.INTERNAL_BROADCAST_URL;
+  if (!url) {
+    if (process.env.ENVIRONMENT === 'production') {
+      console.warn('⚠️  INTERNAL_BROADCAST_URL not set in production — skipping SSE broadcast');
+      return;
+    }
+    console.log('   Using localhost:4001 for SSE broadcast (set INTERNAL_BROADCAST_URL for production)');
+  }
+
+  const broadcastUrl = url || 'http://localhost:4001/internal/broadcast-trends';
+
   try {
-    const res = await fetch(url, {
+    const res = await fetch(broadcastUrl, {
       method: 'POST',
       headers: { 'X-Internal-Secret': secret },
     });
@@ -210,11 +220,10 @@ async function triggerBroadcast(): Promise<void> {
       const body = await res.json() as { connections: number };
       console.log(`📡 SSE broadcast sent to ${body.connections} client(s)`);
     } else {
-      console.warn(`⚠️  Broadcast failed: ${res.status}`);
+      console.warn(`⚠️  Broadcast failed: ${res.status} ${res.statusText}`);
     }
-  } catch {
-    // Server may be down — non-fatal
-    console.warn('⚠️  Could not reach server for SSE broadcast');
+  } catch (err) {
+    console.warn(`⚠️  Could not reach server for SSE broadcast: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

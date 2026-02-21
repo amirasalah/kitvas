@@ -12,6 +12,7 @@ import { fetchTranscript } from '../lib/transcript-fetcher.js';
 import { detectAndTranslate } from '../lib/translator.js';
 import { getTrendsBoost } from '../lib/google-trends/fetcher.js';
 import { normalizeIngredient, getSynonymMatches, getSynonyms } from '../lib/ingredient-synonyms.js';
+import { logger } from '../lib/logger.js';
 
 const SearchInputSchema = z.object({
   ingredients: z.array(z.string()).min(2).max(10),
@@ -28,7 +29,7 @@ async function searchYouTubeLive(
 ): Promise<YouTubeVideo[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) {
-    console.warn('[Search] No YOUTUBE_API_KEY configured, skipping live search');
+    logger.warn('No YOUTUBE_API_KEY configured, skipping live search');
     return [];
   }
 
@@ -49,7 +50,7 @@ async function searchYouTubeLive(
 
     return videoDetails;
   } catch (error) {
-    console.error('[Search] YouTube API error:', error);
+    logger.error('YouTube API error', { error: error instanceof Error ? error.message : String(error) });
     return [];
   }
 }
@@ -352,7 +353,7 @@ export const searchRouter = t.router({
             try {
               transcript = await fetchTranscript(ytVideo.id);
               if (transcript) {
-                console.log(`[Search] Fetched transcript for ${ytVideo.id} (${transcript.length} chars)`);
+                logger.debug(`Fetched transcript for ${ytVideo.id}`, { chars: transcript.length });
                 // Detect language and translate if needed
                 const { translatedText, originalLanguage, wasTranslated } = await detectAndTranslate(transcript);
                 extractionTranscript = wasTranslated ? translatedText : transcript;
@@ -392,7 +393,7 @@ export const searchRouter = t.router({
                 await storeExtractedTags(ctx.prisma, dbVideo.id, extractedTags);
               }
             } catch (tagError) {
-              console.warn(`[Search] Tag extraction failed for ${ytVideo.id}:`, tagError);
+              logger.warn(`Tag extraction failed for ${ytVideo.id}`, { error: tagError instanceof Error ? tagError.message : String(tagError) });
             }
 
             // Calculate relevance score (ingredient matches + title matches)
@@ -472,7 +473,7 @@ export const searchRouter = t.router({
               });
             }
           } catch (error) {
-            console.error(`[Search] Failed to process fresh video ${ytVideo.id}:`, error);
+            logger.error(`Failed to process fresh video ${ytVideo.id}`, { error: error instanceof Error ? error.message : String(error) });
             // Continue with other videos
           }
         }
@@ -503,7 +504,7 @@ export const searchRouter = t.router({
         const remainingVideos = freshYoutubeVideosRaw.slice(20);
         if (remainingVideos.length > 0) {
           processBackgroundVideos(ctx.prisma, remainingVideos).catch((err: unknown) =>
-            console.error('[Search] Background video processing error:', err)
+            logger.error('Background video processing error', { error: err instanceof Error ? err.message : String(err) })
           );
         }
 
@@ -570,7 +571,7 @@ export const searchRouter = t.router({
               },
             });
           } catch (error) {
-            console.error('[Search] Failed to persist demand signal:', error);
+            logger.error('Failed to persist demand signal', { error: error instanceof Error ? error.message : String(error) });
           }
         }
 
@@ -586,7 +587,7 @@ export const searchRouter = t.router({
             },
           });
         } catch (error) {
-          console.error('Failed to log search:', error);
+          logger.error('Failed to log search', { error: error instanceof Error ? error.message : String(error) });
         }
 
         return {
@@ -613,7 +614,7 @@ export const searchRouter = t.router({
           },
         };
       } catch (error) {
-        console.error('Search error:', error);
+        logger.error('Search error', { error: error instanceof Error ? error.message : String(error) });
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to perform search',
