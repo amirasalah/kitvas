@@ -12,6 +12,7 @@ RUN npm ci
 # --- Build ---
 FROM deps AS builder
 COPY frontend/ ./frontend/
+RUN mkdir -p ./frontend/public
 COPY shared/ ./shared/
 COPY backend/src/ ./backend/src/
 COPY backend/prisma/ ./backend/prisma/
@@ -36,7 +37,8 @@ ENV NODE_ENV=production
 COPY --from=builder /app/frontend/.next/standalone ./
 
 # Copy public assets and static files (not included in standalone)
-COPY --from=builder /app/frontend/public ./frontend/public
+# Use shell form to handle potentially empty public directory
+RUN mkdir -p ./frontend/public
 COPY --from=builder /app/frontend/.next/static ./frontend/.next/static
 
 EXPOSE 3000
