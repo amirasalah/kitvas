@@ -9,15 +9,11 @@ type PlatformSource = {
 
 const PLATFORM_COLORS: Record<string, string> = {
   youtube: 'bg-red-500',
-  reddit: 'bg-orange-500',
-  x: 'bg-gray-900',
   web: 'bg-blue-500',
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
   youtube: 'YouTube',
-  reddit: 'Reddit',
-  x: 'X / Twitter',
   web: 'Websites',
 }
 

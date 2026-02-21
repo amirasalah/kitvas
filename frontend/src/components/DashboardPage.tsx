@@ -5,14 +5,12 @@ import { TimePeriodSelector, type Period } from './dashboard/TimePeriodSelector'
 import { PlatformStatusBar } from './dashboard/PlatformStatusBar'
 import { OverviewTab } from './dashboard/OverviewTab'
 import { YouTubeTab } from './dashboard/YouTubeTab'
-import { SocialTab } from './dashboard/SocialTab'
 import { WebTab } from './dashboard/WebTab'
 import { trpc } from '@/app/providers'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: '📊' },
   { id: 'youtube', label: 'YouTube', icon: '🎬' },
-  { id: 'social', label: 'Social', icon: '💬' },
   { id: 'websites', label: 'Websites', icon: '📰' },
 ] as const
 
@@ -29,7 +27,7 @@ export function DashboardPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Food Trend Dashboard</h1>
         <p className="text-sm text-gray-500">
-          Real-time trending food content across YouTube, Reddit, X, and food publications
+          Real-time trending food content across YouTube and food publications
         </p>
       </div>
 
@@ -66,7 +64,6 @@ export function DashboardPage() {
       <div>
         {activeTab === 'overview' && <OverviewTab period={period} />}
         {activeTab === 'youtube' && <YouTubeTab period={period} />}
-        {activeTab === 'social' && <SocialTab period={period} />}
         {activeTab === 'websites' && <WebTab period={period} />}
       </div>
     </div>

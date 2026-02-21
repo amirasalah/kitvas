@@ -9,15 +9,11 @@ type TrendingTopic = {
   growthPct: number | null
   isBreakout: boolean
   youtubeCount: number
-  redditCount: number
-  twitterCount: number
   webCount: number
 }
 
 const SOURCE_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   youtube: { bg: 'bg-red-100', text: 'text-red-700', label: 'YT' },
-  reddit: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'R' },
-  x: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'X' },
   web: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'W' },
 }
 
