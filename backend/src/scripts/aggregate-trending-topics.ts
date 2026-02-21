@@ -1,16 +1,14 @@
 /**
  * Cross-Platform Trend Aggregation
  *
- * Aggregates trending food topics from all sources (YouTube, Reddit, X, Web)
+ * Aggregates trending food topics from all sources (YouTube, Web)
  * into the TrendingTopic model for the dashboard overview.
  *
  * Scoring formula:
- * - YouTube views weight: 0.40
- * - Reddit score weight: 0.25
- * - X engagement weight: 0.20
- * - Web articles weight: 0.15
+ * - YouTube views weight: 0.65
+ * - Web articles weight: 0.35
  *
- * Schedule: Hourly at :45
+ * Schedule: Every 15 minutes
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -35,10 +33,6 @@ function periodToMs(period: string): number {
 interface TopicCounts {
   youtubeCount: number;
   youtubeViews: number;
-  redditCount: number;
-  redditScore: number;
-  twitterCount: number;
-  twitterEngagement: number;
   webCount: number;
 }
 
@@ -58,8 +52,6 @@ async function aggregateTrendingTopics() {
       if (!topicMap.has(normalized)) {
         topicMap.set(normalized, {
           youtubeCount: 0, youtubeViews: 0,
-          redditCount: 0, redditScore: 0,
-          twitterCount: 0, twitterEngagement: 0,
           webCount: 0,
         });
       }
@@ -88,33 +80,7 @@ async function aggregateTrendingTopics() {
       }
     }
 
-    // 2. Reddit: Count ingredient mentions in recent posts
-    const recentReddit = await prisma.redditPost.findMany({
-      where: { createdUtc: { gte: since } },
-    });
-
-    for (const post of recentReddit) {
-      for (const ingredient of post.ingredients) {
-        const counts = getOrCreate(ingredient);
-        counts.redditCount++;
-        counts.redditScore += post.score;
-      }
-    }
-
-    // 3. X/Twitter: Count ingredient mentions in recent tweets
-    const recentTweets = await prisma.tweet.findMany({
-      where: { createdAt: { gte: since } },
-    });
-
-    for (const tweet of recentTweets) {
-      for (const ingredient of tweet.ingredients) {
-        const counts = getOrCreate(ingredient);
-        counts.twitterCount++;
-        counts.twitterEngagement += tweet.likeCount + tweet.retweetCount;
-      }
-    }
-
-    // 4. Web: Count ingredient mentions in recent articles
+    // 2. Web: Count ingredient mentions in recent articles
     const recentArticles = await prisma.webArticle.findMany({
       where: { publishedAt: { gte: since } },
     });
@@ -128,32 +94,26 @@ async function aggregateTrendingTopics() {
 
     // Calculate trend scores and upsert
     const maxYtViews = Math.max(...Array.from(topicMap.values()).map(c => c.youtubeViews), 1);
-    const maxRedditScore = Math.max(...Array.from(topicMap.values()).map(c => c.redditScore), 1);
-    const maxTwitterEng = Math.max(...Array.from(topicMap.values()).map(c => c.twitterEngagement), 1);
     const maxWebCount = Math.max(...Array.from(topicMap.values()).map(c => c.webCount), 1);
 
     let upsertCount = 0;
 
     for (const [topic, counts] of topicMap.entries()) {
-      const mentionCount = counts.youtubeCount + counts.redditCount + counts.twitterCount + counts.webCount;
+      const mentionCount = counts.youtubeCount + counts.webCount;
       if (mentionCount < 2) continue; // Skip topics with very few mentions
 
       // Normalized weighted score (0-100)
-      const ytScore = (counts.youtubeViews / maxYtViews) * 100 * 0.40;
-      const redditScoreNorm = (counts.redditScore / maxRedditScore) * 100 * 0.25;
-      const twitterScoreNorm = (counts.twitterEngagement / maxTwitterEng) * 100 * 0.20;
-      const webScoreNorm = (counts.webCount / maxWebCount) * 100 * 0.15;
-      const trendScore = Math.min(100, ytScore + redditScoreNorm + twitterScoreNorm + webScoreNorm);
+      const ytScore = (counts.youtubeViews / maxYtViews) * 100 * 0.65;
+      const webScoreNorm = (counts.webCount / maxWebCount) * 100 * 0.35;
+      const trendScore = Math.min(100, ytScore + webScoreNorm);
 
       // Determine active sources
       const sources: string[] = [];
       if (counts.youtubeCount > 0) sources.push('youtube');
-      if (counts.redditCount > 0) sources.push('reddit');
-      if (counts.twitterCount > 0) sources.push('x');
       if (counts.webCount > 0) sources.push('web');
 
-      // Breakout: appears on 3+ platforms or very high score
-      const isBreakout = sources.length >= 3 || trendScore > 80;
+      // Breakout: appears on both platforms or very high score
+      const isBreakout = sources.length >= 2 || trendScore > 80;
 
       try {
         // Calculate growth by comparing to previous period
@@ -174,8 +134,6 @@ async function aggregateTrendingTopics() {
             sources,
             mentionCount,
             youtubeCount: counts.youtubeCount,
-            redditCount: counts.redditCount,
-            twitterCount: counts.twitterCount,
             webCount: counts.webCount,
             growthPct,
             isBreakout,
@@ -187,8 +145,6 @@ async function aggregateTrendingTopics() {
             sources,
             mentionCount,
             youtubeCount: counts.youtubeCount,
-            redditCount: counts.redditCount,
-            twitterCount: counts.twitterCount,
             webCount: counts.webCount,
             growthPct,
             isBreakout,

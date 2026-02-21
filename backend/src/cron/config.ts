@@ -81,34 +81,16 @@ export const scheduledJobs: ScheduledJob[] = [
   {
     name: 'youtube-trending',
     description: 'Fetch trending food videos from YouTube',
-    schedule: '0 */2 * * *', // Every 2 hours
+    schedule: '*/30 * * * *', // Every 30 minutes
     script: 'src/scripts/fetch-youtube-trending.ts',
     enabled: true,
     timeout: 15 * 60 * 1000, // 15 minutes
   },
 
   {
-    name: 'reddit-monitor',
-    description: 'Fetch hot food posts from Reddit subreddits',
-    schedule: '*/30 * * * *', // Every 30 minutes
-    script: 'src/scripts/fetch-reddit.ts',
-    enabled: true,
-    timeout: 10 * 60 * 1000, // 10 minutes
-  },
-
-  {
-    name: 'x-monitor',
-    description: 'Fetch trending food tweets from X/Twitter',
-    schedule: '0 * * * *', // Every hour at :00
-    script: 'src/scripts/fetch-x-tweets.ts',
-    enabled: true,
-    timeout: 10 * 60 * 1000, // 10 minutes
-  },
-
-  {
     name: 'rss-food-websites',
     description: 'Fetch articles from food publication RSS feeds',
-    schedule: '0 */6 * * *', // Every 6 hours
+    schedule: '0 * * * *', // Every hour
     script: 'src/scripts/fetch-food-websites.ts',
     enabled: true,
     timeout: 10 * 60 * 1000, // 10 minutes
@@ -117,7 +99,7 @@ export const scheduledJobs: ScheduledJob[] = [
   {
     name: 'trend-aggregation',
     description: 'Aggregate trending topics across all platforms',
-    schedule: '45 * * * *', // Hourly at :45
+    schedule: '*/15 * * * *', // Every 15 minutes
     script: 'src/scripts/aggregate-trending-topics.ts',
     enabled: true,
     timeout: 10 * 60 * 1000, // 10 minutes

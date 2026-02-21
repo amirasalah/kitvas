@@ -78,38 +78,6 @@ export const dashboardRouter = t.router({
       }));
     }),
 
-  // Hot Reddit food posts
-  redditHot: t.procedure
-    .input(z.object({
-      period: PeriodSchema,
-      subreddit: z.string().optional(),
-    }))
-    .query(async ({ input, ctx }) => {
-      const since = new Date(Date.now() - periodToMs(input.period));
-
-      return ctx.prisma.redditPost.findMany({
-        where: {
-          createdUtc: { gte: since },
-          ...(input.subreddit ? { subreddit: input.subreddit } : {}),
-        },
-        orderBy: { score: 'desc' },
-        take: 20,
-      });
-    }),
-
-  // Trending food tweets
-  twitterTrending: t.procedure
-    .input(z.object({ period: PeriodSchema }))
-    .query(async ({ input, ctx }) => {
-      const since = new Date(Date.now() - periodToMs(input.period));
-
-      return ctx.prisma.tweet.findMany({
-        where: { createdAt: { gte: since } },
-        orderBy: { likeCount: 'desc' },
-        take: 20,
-      });
-    }),
-
   // Latest food website articles
   webLatest: t.procedure
     .input(z.object({

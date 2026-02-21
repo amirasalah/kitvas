@@ -27,8 +27,6 @@
     "scheduler:list": "tsx src/cron/scheduler.ts list",
     "scheduler:run": "tsx src/cron/scheduler.ts run",
     "dashboard:youtube": "tsx src/scripts/fetch-youtube-trending.ts",
-    "dashboard:reddit": "tsx src/scripts/fetch-reddit.ts",
-    "dashboard:x": "tsx src/scripts/fetch-x-tweets.ts",
     "dashboard:rss": "tsx src/scripts/fetch-food-websites.ts",
     "dashboard:aggregate": "tsx src/scripts/aggregate-trending-topics.ts"
   },
