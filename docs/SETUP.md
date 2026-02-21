@@ -101,8 +101,8 @@ kitvas/
 ✅ **Shipped:**
 - Project structure (monorepo with frontend, backend, shared)
 - Next.js 14 frontend with App Router
-- Hono backend with tRPC (4 routers: search, analytics, gaps, alerts)
-- Prisma schema with 18 models
+- Hono backend with tRPC (5 routers: search, analytics, gaps, alerts, dashboard)
+- Prisma schema with 22 models
 - YouTube API integration with inline extraction
 - Ingredient extraction (Groq LLM + keyword fallback)
 - Ingredient synonym mapping & normalization (100+ canonical forms)
@@ -117,8 +117,12 @@ kitvas/
 - Authentication (NextAuth v5 + Google OAuth, JWE token verification)
 - Guest/signed-in feature gating
 - Breakout ingredient email alerts (Resend)
+- Food Trend Dashboard (Overview, YouTube, Websites tabs)
+- 12 food publication RSS feeds (Serious Eats, Bon Appetit, Food Network, etc.)
+- Cross-platform trending topic aggregation
 - Donation support (Stripe Payment Link)
 - Open source (MIT license)
+- E2E test suites: 70 backend API tests (Vitest) + 47 Playwright browser tests
 
 ## 5. Ingest Videos from YouTube
 
@@ -180,6 +184,9 @@ pm2 stop all
 | Trends Aggregation | 12:10 AM | Aggregate search trends |
 | View Count Refresh | 3:00 AM Sunday | Refresh YouTube view counts |
 | Wikidata Ingredients | 6:00 AM Wednesday | Fetch ingredients from Wikidata |
+| YouTube Trending | Every 30 min | Fetch trending food videos for dashboard |
+| RSS Food Websites | Hourly | Fetch articles from 12 food publication RSS feeds |
+| Trend Aggregation | Every 15 min | Cross-platform trending topic aggregation |
 
 ### Manual Execution
 
@@ -189,7 +196,7 @@ Run individual jobs manually:
 cd backend
 
 # Fetch Google Trends data
-npm run trends:hourly
+npm run trends:daily
 
 # Run batch video ingestion
 npm run batch:daily
@@ -232,13 +239,11 @@ Once your database is set up:
 
 5. Results will show:
    - **Demand Signal**: HOT/GROWING/STABLE/NICHE indicator with score
-   - **Opportunities**: Content gaps and trending topics
-   - **Videos**: With detected ingredients and tags (click ingredients to correct)
+   - **Content Gaps**: Underserved ingredient combinations
+   - **Videos**: With AI-detected ingredients and tags
    - **Relevance Score**: How well each video matches your search
 
-6. Click on any ingredient tag to correct detection errors (moat feature)
-
-7. View ingredient gaps and content angles for deeper market insights
+6. View ingredient gaps and content angles for deeper market insights
 
 ## Troubleshooting
 

@@ -107,7 +107,7 @@ pm2 status
 
 Or run individual jobs manually:
 ```bash
-npm run trends:hourly     # Fetch Google Trends data (runs hourly by default)
+npm run trends:daily     # Fetch Google Trends data (runs hourly by default)
 npm run batch:daily       # Ingest YouTube videos
 npm run aggregate:trends  # Aggregate trends into demand signals
 npm run scheduler         # Start scheduler daemon
@@ -117,11 +117,13 @@ See `SETUP.md` for more details.
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14, Tailwind CSS, shadcn/ui, tRPC, NextAuth v5 (Google OAuth)
+- **Frontend**: Next.js 14, Tailwind CSS, tRPC, NextAuth v5 (Google OAuth)
 - **Backend**: Hono, tRPC, Prisma, PostgreSQL, jose (JWT verification)
 - **AI**: Groq (Llama 3.3 70B) for ingredient extraction
 - **Auth**: NextAuth v5 (beta.30) with JWE tokens, decrypted on backend via jose
+- **Data Sources**: YouTube Data API v3, Google Trends, 12 food publication RSS feeds
 - **Infrastructure**: Railway, Supabase
+- **Testing**: Vitest (backend API) + Playwright (browser E2E)
 
 ## Features
 
@@ -147,6 +149,13 @@ See `SETUP.md` for more details.
 - **Google OAuth**: Sign in with Google via NextAuth v5
 - **JWT Verification**: Backend decrypts NextAuth JWE tokens using jose library
 - **Guest Access**: Core search and analytics available without login; advanced features gated behind sign-in
+
+### Food Trend Dashboard
+- **Overview Tab**: Cross-platform trending topics with breakout detection and summary stats
+- **YouTube Tab**: Trending food video cards with thumbnails, view counts, ingredient chips
+- **Websites Tab**: Latest articles from 12 food publications (Serious Eats, Bon Appetit, Food Network, etc.)
+- **Time Periods**: Filter by 1H, 24H, 7D, or 30D across all tabs
+- **Platform Status**: Real-time health indicators for each data source
 
 ### Google Trends Integration
 - **External Validation**: Google Trends data validates internal demand signals

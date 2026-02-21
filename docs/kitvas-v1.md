@@ -97,7 +97,7 @@ A creator spends 4-8 hours filming a recipe, only to discover:
 | **Database** | PostgreSQL (Supabase) via Prisma ORM |
 | **Auth** | NextAuth v5 (beta.30), Google OAuth |
 | **AI/ML** | Groq LLM (ingredient + tag extraction) |
-| **External APIs** | YouTube Data API v3, Google Trends |
+| **External APIs** | YouTube Data API v3, Google Trends, RSS (food publications) |
 | **Styling** | Tailwind CSS |
 
 ### 4.2 Key Architecture Patterns
@@ -115,21 +115,23 @@ kitvas/
 ├── backend/
 │   ├── src/
 │   │   ├── index.ts              # Hono server entry
-│   │   ├── router.ts             # tRPC app router (search, analytics, gaps, alerts)
+│   │   ├── router.ts             # tRPC app router (5 routers)
 │   │   ├── trpc.ts               # tRPC base, procedures (public, protected)
 │   │   ├── routers/
 │   │   │   ├── search.ts         # Search + autocomplete + transcripts
-│   │   │   ├── analytics.ts      # Trending, dashboard, gaps, co-occurrence
-│   │   │   └── gaps.ts           # Content gap analysis
+│   │   │   ├── analytics.ts      # Trending, co-occurrence, sparklines
+│   │   │   ├── gaps.ts           # Content gap analysis
+│   │   │   ├── alerts.ts         # Email alert subscriptions (protected)
+│   │   │   └── dashboard.ts      # Dashboard overview, YouTube, web articles
 │   │   ├── lib/                  # Business logic modules
 │   │   ├── scripts/              # Data ingestion & maintenance
-│   │   └── cron/                 # Scheduled jobs
+│   │   └── cron/                 # Scheduled jobs (8 jobs)
 │   └── prisma/
-│       └── schema.prisma         # Database schema (16 models)
+│       └── schema.prisma         # Database schema (22 models)
 ├── frontend/
 │   ├── src/
 │   │   ├── app/                  # Next.js App Router pages
-│   │   ├── components/           # React components (11 files)
+│   │   ├── components/           # React components + dashboard/
 │   │   └── lib/                  # Auth config, tRPC types
 │   └── public/                   # Static assets
 └── docs/
@@ -250,6 +252,37 @@ kitvas/
 - Language detection
 - English translation via Groq for non-English transcripts
 
+### 5.10 Food Trend Dashboard
+
+**What it does:** Real-time dashboard showing trending food content across YouTube and food publications.
+
+**Three tabs:**
+- **Overview** — Cross-platform trending topics with breakout detection, multi-source scoring, summary stats
+- **YouTube** — Trending food videos with thumbnails, view counts, ingredient/tag chips
+- **Websites** — Latest articles from 12 food publications via RSS (Serious Eats, Bon Appetit, Food Network, etc.)
+
+**Features:**
+- Time period selector (1H, 24H, 7D, 30D) — all tabs respond to period change
+- Platform status bar — shows last fetch time and health of each data source
+- Trending topic aggregation every 15 minutes across YouTube + web
+- Breakout ingredient highlighting
+
+**Data pipeline:**
+- YouTube trending videos fetched every 30 minutes
+- Food publication RSS feeds fetched hourly (12 sources via Google News RSS proxy for some)
+- Trending topic aggregation runs every 15 minutes
+- Platform source health tracked per fetch
+
+### 5.11 Breakout Email Alerts
+
+**What it does:** Email notifications when ingredients experience breakout growth (>5000%) on Google Trends.
+
+**How it works:**
+- Users subscribe/unsubscribe via toggle in navbar dropdown
+- Backend checks for breakout ingredients during Google Trends fetch
+- Sends email via Resend API with breakout details
+- Deduplication prevents repeat alerts for same ingredient within 24h
+
 ---
 
 ## 6. User Experience
@@ -258,7 +291,8 @@ kitvas/
 
 | Route | Component | Purpose |
 |-------|-----------|---------|
-| `/` | SearchPage | Home page — hero, search input, trending ingredients, results |
+| `/` | DashboardPage | Food trend dashboard — overview, YouTube, web articles |
+| `/search` | SearchPage | Ingredient search — hero, search input, trending, results |
 | `/auth/signin` | SignInPage | Google OAuth sign-in with benefits list |
 
 ### 6.2 Key Components
@@ -271,7 +305,15 @@ kitvas/
 | **ContentAngles** | Rising queries and angle suggestions |
 | **TrendingIngredients** | Google Trends powered trending ingredient pills |
 | **IngredientTrendSparkline** | Mini charts for ingredient search/video volume |
-| **Navbar** | Logo, auth status, user dropdown with alert toggle and sign out |
+| **DashboardPage** | Dashboard with Overview, YouTube, and Websites tabs |
+| **OverviewTab** | Trending topics, breakout indicators, summary stats |
+| **YouTubeTab** | Trending food video cards with thumbnails |
+| **WebTab** | Food publication article cards from 12 RSS sources |
+| **TimePeriodSelector** | 1H/24H/7D/30D period buttons |
+| **PlatformStatusBar** | Data source health indicators |
+| **TrendingTopicCard** | Individual topic row with scores and sources |
+| **AlertToggle** | Email alert subscribe/unsubscribe toggle |
+| **Navbar** | Logo, nav links, auth status, user dropdown |
 | **LoginGate** | Blurs content behind sign-in prompt |
 | **HeroFoodDecorations** | Animated SVG food illustrations |
 | **CoffeeFooter** | Support/donation footer |
@@ -280,6 +322,7 @@ kitvas/
 
 | Feature | Guest | Signed In |
 |---------|-------|-----------|
+| Dashboard | Full access | Full access |
 | Search | 2 per session | Unlimited |
 | Trending ingredients | Blurred | Full access |
 | Demand signal details | Blurred | Full access |
@@ -287,6 +330,7 @@ kitvas/
 | Content angles | Blurred | Full access |
 | Sparkline trends | Blurred | Full access |
 | Autocomplete | Available | Available |
+| Email alerts | N/A | Subscribe/unsubscribe |
 
 ### 6.4 Design Principles
 
@@ -299,7 +343,7 @@ kitvas/
 
 ## 7. Data Models
 
-### 7.1 Core Models (18 total)
+### 7.1 Core Models (22 total)
 
 **Auth & Users:**
 
@@ -309,24 +353,34 @@ kitvas/
 - `VerificationToken` — Email verification
 
 **Video Intelligence:**
+
 - `Video` — YouTube videos with transcript, views, channel, publish date
 - `VideoIngredient` — Extracted ingredients with confidence and source (title/description/transcript)
 - `VideoTag` — Cooking method, dietary, and cuisine tags with confidence
 
 **Ingredient Knowledge:**
+
 - `Ingredient` — Canonical ingredient names
 - `IngredientSynonym` — Aliases from manual, Wikidata, or user sources
 - `IngredientTrend` — Daily/weekly/monthly search and video counts
 
 **Analytics & Demand:**
+
 - `Search` — Logged searches with ingredients, result count, demand band
 - `DemandSignal` — Cached demand metrics per ingredient combination
 
 **Google Trends:**
+
 - `GoogleTrend` — Interest over time data (0-100 scores, breakout flags)
 - `GoogleTrendRelatedQuery` — Rising/top related queries
 - `GoogleTrendsCache` — API response cache with TTL
 - `GoogleTrendsJobLog` — Job execution tracking
+
+**Dashboard:**
+
+- `WebArticle` — Articles from food publication RSS feeds (title, URL, source, ingredients)
+- `TrendingTopic` — Cross-platform trending topic aggregation (scores, breakout flags)
+- `PlatformSource` — Data source health tracking (last fetch, status, item count)
 
 **Alerts:**
 
@@ -344,7 +398,7 @@ kitvas/
 ### 8.1 tRPC Router Structure
 
 ```
-appRouter
+appRouter (5 routers, 22 endpoints)
 ├── search
 │   ├── autocomplete          (public)  — Ingredient suggestions
 │   ├── search                (public)  — Main search with YouTube fallback
@@ -362,6 +416,12 @@ appRouter
 │   └── topIngredientTrends   (public)  — Top ingredients by velocity
 ├── gaps
 │   └── findGaps              (public)  — Content gap analysis
+├── dashboard
+│   ├── overview              (public)  — Trending topics with breakout detection
+│   ├── topTopics             (public)  — Top trending topics by score
+│   ├── youtubeTrending       (public)  — Trending food videos
+│   ├── webLatest             (public)  — Latest food publication articles
+│   └── sourceStatus          (public)  — Data source health status
 └── alerts
     ├── getStatus             (protected) — Current alert subscription status
     ├── subscribe             (protected) — Enable breakout email alerts
@@ -372,7 +432,7 @@ appRouter
 
 | Procedure Type | Usage |
 |---------------|-------|
-| `t.procedure` (public) | Search, analytics, gaps |
+| `t.procedure` (public) | Search, analytics, gaps, dashboard |
 | `protectedProcedure` | Alerts (getStatus, subscribe, unsubscribe) |
 
 ---
@@ -384,13 +444,16 @@ appRouter
 | Script | Purpose | Schedule |
 |--------|---------|----------|
 | `fetch-google-trends.ts` | Fetch Google Trends interest data | Hourly (cron) |
-| `daily-batch-job.ts` | Main daily processing orchestration | Daily (cron) |
-| `aggregate-trends.ts` | Aggregate trend data | Part of daily batch |
+| `daily-batch-job.ts` | Main daily processing orchestration | Daily at 2:00 AM UTC |
+| `aggregate-trends.ts` | Aggregate search trend data | Daily at 12:10 AM UTC |
 | `populate-ingredient-trends.ts` | Calculate trend snapshots | Part of daily batch |
-| `refresh-views.ts` | Update video view counts from YouTube | Part of daily batch |
+| `refresh-views.ts` | Update video view counts from YouTube | Weekly (Sundays 3 AM UTC) |
+| `fetch-wikidata-ingredients.ts` | SPARQL query for food ingredients | Weekly (Wednesdays 6 AM UTC) |
+| `fetch-youtube-trending.ts` | Fetch trending food videos for dashboard | Every 30 minutes |
+| `fetch-food-websites.ts` | Fetch articles from 12 food publication RSS feeds | Hourly |
+| `aggregate-trending-topics.ts` | Cross-platform trending topic aggregation | Every 15 minutes |
 | `ingest-videos.ts` | Batch YouTube video crawling | Manual / on-demand |
 | `import-public-recipes.ts` | Public recipe dataset import | One-time |
-| `fetch-wikidata-ingredients.ts` | SPARQL query for food ingredients | One-time |
 | `backfill-transcripts.ts` | Fetch missing video transcripts | Manual |
 | `backfill-translations.ts` | Backfill transcript translations | Manual |
 | `audit-data.ts` | Data quality and consistency checks | Manual |
@@ -520,9 +583,11 @@ ALLOWED_ORIGINS                  # Comma-separated production origins for CORS
 
 | Feature | Description |
 |---------|-------------|
+| Food Trend Dashboard | Real-time dashboard with Overview, YouTube, and Websites tabs across 12 food publications |
 | Breakout Email Alerts | Email notifications when ingredients experience >5000% growth on Google Trends |
 | Open Source (MIT) | Full codebase open sourced |
 | Donations | Stripe Payment Link for voluntary support |
+| E2E Test Suites | 70 backend API tests (Vitest) + 47 Playwright browser tests |
 
 ### 14.2 Removed Features (Previously Planned)
 

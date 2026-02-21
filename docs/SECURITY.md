@@ -57,7 +57,7 @@ Kitvas uses **NextAuth v5 (beta.30)** with Google OAuth for authentication. The 
 
 | Procedure Type | Access Level | Usage |
 |---------------|-------------|-------|
-| `t.procedure` (public) | Anyone | Search, autocomplete, analytics, gaps |
+| `t.procedure` (public) | Anyone | Search, autocomplete, analytics, gaps, dashboard |
 | `protectedProcedure` | Signed-in users | Alerts (getStatus, subscribe, unsubscribe) |
 
 ## Security Best Practices

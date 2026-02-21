@@ -18,7 +18,7 @@ A comprehensive catalog of current constraints, technical debt, and areas for im
 | Query construction | Simple `"ingredient1 ingredient2 recipe"` — no advanced operators, phrase search, or negative keywords |
 | Database pool | Top 200 videos by views queried; niche videos with few views may be excluded |
 | No pagination | Can't load more results beyond the initial 50 |
-| No filters | Can't filter by video duration, upload date, channel, language, or category |
+| Tag filters only | Can filter by cooking method, dietary, and cuisine tags — but not by video duration, upload date, channel, or language |
 
 ### Impact on creators
 
@@ -39,7 +39,7 @@ A comprehensive catalog of current constraints, technical debt, and areas for im
 | Transcript truncation | First 4000 characters only — long recipe transcripts cut off |
 | Confidence threshold | Only ingredients with >= 0.5 confidence included in search results |
 | Static blocklist | 92 hardcoded terms (cooking methods, adjectives, equipment) |
-| Dynamic blocklist | Requires 2+ user corrections before an item is blocked |
+| No dynamic blocklist | Static blocklist only — no user feedback loop to improve extraction |
 
 ### What gets missed
 
@@ -153,7 +153,7 @@ A comprehensive catalog of current constraints, technical debt, and areas for im
 | No saved combinations | Can't bookmark ingredient combinations for tracking |
 | No comparison mode | Can't compare two ingredient combinations side-by-side |
 | No advanced filters | Can't filter results by views, date, channel, language |
-| No dietary filters | Can't filter by vegan, keto, gluten-free, allergen-free |
+| Basic dietary filters | Tag-based filtering (vegan, keto, etc.) available but depends on AI extraction accuracy |
 | No bulk operations | Can't export results, share searches, or batch-analyze |
 | Transcript viewer | Inline scrollable panel only — no full-page view or search within transcript |
 

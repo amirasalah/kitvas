@@ -107,6 +107,9 @@ pm2 start ecosystem.config.cjs
 | Daily Batch Job | 2:00 AM | Ingest new YouTube videos |
 | View Count Refresh | 3:00 AM (Sunday) | Refresh YouTube view counts |
 | Wikidata Ingredients | 6:00 AM (Wednesday) | Fetch new ingredients from Wikidata |
+| YouTube Trending | Every 30 min | Fetch trending food videos for dashboard |
+| RSS Food Websites | Hourly | Fetch articles from 12 food publication RSS feeds |
+| Trend Aggregation | Every 15 min | Cross-platform trending topic aggregation |
 
 All jobs are defined in `backend/src/cron/config.ts`.
 
@@ -143,7 +146,7 @@ If you prefer system cron over the built-in scheduler:
 crontab -e
 
 # Google Trends - every hour
-0 * * * * cd /path/to/kitvas/backend && npm run trends:hourly >> logs/trends.log 2>&1
+0 * * * * cd /path/to/kitvas/backend && npm run trends:daily >> logs/trends.log 2>&1
 
 # Trends aggregation - 12:10 AM daily
 10 0 * * * cd /path/to/kitvas/backend && npm run aggregate:trends >> logs/aggregate.log 2>&1
@@ -156,7 +159,7 @@ crontab -e
 
 ```bash
 # Run individual jobs manually
-npm run trends:hourly     # Fetch Google Trends
+npm run trends:daily     # Fetch Google Trends
 npm run batch:daily       # Ingest YouTube videos
 npm run aggregate:trends  # Aggregate trend data
 npm run scheduler         # Start the scheduler daemon
