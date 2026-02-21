@@ -25,7 +25,12 @@
     "scheduler": "tsx src/cron/scheduler.ts start",
     "scheduler:once": "tsx src/cron/scheduler.ts once",
     "scheduler:list": "tsx src/cron/scheduler.ts list",
-    "scheduler:run": "tsx src/cron/scheduler.ts run"
+    "scheduler:run": "tsx src/cron/scheduler.ts run",
+    "dashboard:youtube": "tsx src/scripts/fetch-youtube-trending.ts",
+    "dashboard:reddit": "tsx src/scripts/fetch-reddit.ts",
+    "dashboard:x": "tsx src/scripts/fetch-x-tweets.ts",
+    "dashboard:rss": "tsx src/scripts/fetch-food-websites.ts",
+    "dashboard:aggregate": "tsx src/scripts/aggregate-trending-topics.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -41,6 +46,7 @@
     "jose": "^6.1.3",
     "node-cron": "^4.2.1",
     "resend": "^6.9.2",
+    "rss-parser": "^3.13.0",
     "youtube-transcript-plus": "^1.1.2",
     "zod": "^3.22.4"
   },

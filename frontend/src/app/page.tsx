@@ -1,5 +1,5 @@
-import { SearchPage } from '@/components/SearchPage'
+import { DashboardPage } from '@/components/DashboardPage'
 
 export default function Home() {
-  return <SearchPage />
+  return <DashboardPage />
 }

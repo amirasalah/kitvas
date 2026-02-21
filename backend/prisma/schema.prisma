@@ -317,3 +317,103 @@ model IngredientFetchJob {
   @@index([status])
   @@index([source])
 }
+
+// ============================================================================
+// Dashboard: Multi-Platform Trending Models
+// ============================================================================
+
+// Reddit posts from food-related subreddits
+model RedditPost {
+  id           String   @id @default(cuid())
+  redditId     String   @unique
+  subreddit    String
+  title        String
+  selfText     String?  @db.Text
+  url          String?
+  author       String
+  score        Int
+  numComments  Int
+  upvoteRatio  Float?
+  permalink    String
+  isVideo      Boolean  @default(false)
+  thumbnailUrl String?
+  ingredients  String[]
+  createdUtc   DateTime
+  fetchedAt    DateTime @default(now())
+
+  @@index([subreddit, createdUtc])
+  @@index([fetchedAt])
+  @@index([score])
+}
+
+// Tweets from food-related hashtags and trending ingredients
+model Tweet {
+  id              String   @id @default(cuid())
+  tweetId         String   @unique
+  authorUsername  String
+  authorName      String?
+  text            String   @db.Text
+  likeCount       Int      @default(0)
+  retweetCount    Int      @default(0)
+  replyCount      Int      @default(0)
+  quoteCount      Int      @default(0)
+  impressionCount Int?
+  hashtags        String[]
+  ingredients     String[]
+  mediaUrl        String?
+  createdAt       DateTime
+  fetchedAt       DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([fetchedAt])
+  @@index([likeCount])
+}
+
+// Articles from food publication RSS feeds
+model WebArticle {
+  id          String   @id @default(cuid())
+  url         String   @unique
+  source      String
+  title       String
+  author      String?
+  excerpt     String?  @db.Text
+  imageUrl    String?
+  ingredients String[]
+  categories  String[]
+  publishedAt DateTime
+  fetchedAt   DateTime @default(now())
+
+  @@index([source, publishedAt])
+  @@index([fetchedAt])
+}
+
+// Cross-platform trending topic aggregation
+model TrendingTopic {
+  id           String   @id @default(cuid())
+  topic        String
+  period       String   // '1h' | '24h' | '7d' | '30d'
+  trendScore   Float
+  sources      String[] // ['youtube', 'reddit', 'x', 'web']
+  mentionCount Int
+  youtubeCount Int      @default(0)
+  redditCount  Int      @default(0)
+  twitterCount Int      @default(0)
+  webCount     Int      @default(0)
+  growthPct    Float?
+  isBreakout   Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([topic, period])
+  @@index([period, trendScore])
+}
+
+// Tracks health status of each data source
+model PlatformSource {
+  id            String    @id @default(cuid())
+  platform      String    @unique // 'youtube' | 'reddit' | 'x' | 'web'
+  lastFetchedAt DateTime?
+  lastStatus    String?   // 'success' | 'error' | 'rate_limited'
+  itemsFetched  Int       @default(0)
+  errorMessage  String?
+  updatedAt     DateTime  @updatedAt
+}

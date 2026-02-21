@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { useState } from 'react'
 import { AlertToggle } from './AlertToggle'
@@ -8,17 +9,43 @@ import { AlertToggle } from './AlertToggle'
 export function Navbar() {
   const { data: session, status } = useSession()
   const [showDropdown, setShowDropdown] = useState(false)
+  const pathname = usePathname()
 
   return (
     <nav className="sticky top-0 z-50 backdrop-blur-md bg-white/10">
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link href="/" className="flex items-center">
-            <span className="text-2xl bitcount-logo text-gray-900">Kitvas</span>
-          </Link>
+          {/* Logo + Nav Links */}
+          <div className="flex items-center gap-6">
+            <Link href="/" className="flex items-center">
+              <span className="text-2xl bitcount-logo text-gray-900">Kitvas</span>
+            </Link>
 
-          {/* Navigation */}
+            <div className="hidden sm:flex items-center gap-1">
+              <Link
+                href="/"
+                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                  pathname === '/'
+                    ? 'bg-white/60 text-gray-900'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/30'
+                }`}
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/search"
+                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                  pathname === '/search'
+                    ? 'bg-white/60 text-gray-900'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/30'
+                }`}
+              >
+                Search
+              </Link>
+            </div>
+          </div>
+
+          {/* Right side */}
           <div className="flex items-center gap-3">
             {/* Auth Section */}
             {status === 'loading' ? (
