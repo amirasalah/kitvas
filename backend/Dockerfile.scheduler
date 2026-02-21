@@ -1,0 +1,19 @@
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Install all deps (tsx is a devDependency needed at runtime for spawning scripts)
+COPY package.json package-lock.json ./
+COPY backend/package.json ./backend/
+COPY shared/package.json ./shared/
+COPY frontend/package.json ./frontend/
+RUN npm ci --include=dev
+
+# Copy source files (scheduler spawns TypeScript scripts via tsx)
+COPY backend/ ./backend/
+COPY shared/ ./shared/
+
+# Generate Prisma client
+RUN npx prisma generate --schema=backend/prisma/schema.prisma
+
+CMD ["npx", "tsx", "backend/src/cron/scheduler.ts", "start"]

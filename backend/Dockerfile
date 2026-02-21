@@ -1,0 +1,42 @@
+FROM node:20-alpine AS base
+
+# --- Dependencies ---
+FROM base AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY backend/package.json ./backend/
+COPY shared/package.json ./shared/
+COPY frontend/package.json ./frontend/
+RUN npm ci
+
+# --- Build ---
+FROM deps AS builder
+COPY backend/ ./backend/
+COPY shared/ ./shared/
+RUN npx prisma generate --schema=backend/prisma/schema.prisma
+RUN npm run build --workspace=backend
+
+# --- Runner ---
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Install production dependencies only
+COPY package.json package-lock.json ./
+COPY backend/package.json ./backend/
+COPY shared/package.json ./shared/
+COPY frontend/package.json ./frontend/
+RUN npm ci --omit=dev
+
+# Copy Prisma schema and generate client against production deps
+COPY backend/prisma ./backend/prisma
+RUN npx prisma generate --schema=backend/prisma/schema.prisma
+
+# Copy compiled backend and shared source
+COPY --from=builder /app/backend/dist ./backend/dist
+COPY shared/ ./shared/
+
+EXPOSE 4001
+ENV PORT=4001
+
+CMD ["node", "backend/dist/index.js"]
