@@ -7,22 +7,30 @@ const SOURCE_LOGOS: Record<string, string> = {
   seriouseats: 'SE',
   bonappetit: 'BA',
   thekitchn: 'TK',
-  foodnetwork: 'FN',
   allrecipes: 'AR',
   epicurious: 'EP',
   smittenkitchen: 'SK',
   minimalistbaker: 'MB',
+  simplyrecipes: 'SR',
+  budgetbytes: 'BB',
+  loveandlemons: 'LL',
+  nytfood: 'NY',
+  foodnetwork: 'FN',
 }
 
 const SOURCE_LABELS: Record<string, string> = {
   seriouseats: 'Serious Eats',
   bonappetit: 'Bon Appetit',
   thekitchn: 'The Kitchn',
-  foodnetwork: 'Food Network',
   allrecipes: 'Allrecipes',
   epicurious: 'Epicurious',
   smittenkitchen: 'Smitten Kitchen',
   minimalistbaker: 'Minimalist Baker',
+  simplyrecipes: 'Simply Recipes',
+  budgetbytes: 'Budget Bytes',
+  loveandlemons: 'Love and Lemons',
+  nytfood: 'NYT Food',
+  foodnetwork: 'Food Network',
 }
 
 export function WebTab({ period }: { period: Period }) {

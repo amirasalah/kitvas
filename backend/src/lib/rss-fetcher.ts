@@ -24,22 +24,17 @@ export const FOOD_FEEDS: FeedSource[] = [
   {
     name: 'seriouseats',
     label: 'Serious Eats',
-    feedUrl: 'https://www.seriouseats.com/feeds/serious-eats',
+    feedUrl: 'https://feeds-api.dotdashmeredith.com/v1/rss/google/ad57d421-0ff5-41e7-a5da-f2167b6d7f7a',
   },
   {
     name: 'thekitchn',
     label: 'The Kitchn',
-    feedUrl: 'https://www.thekitchn.com/rss',
-  },
-  {
-    name: 'foodnetwork',
-    label: 'Food Network',
-    feedUrl: 'https://www.foodnetwork.com/fn-dish/rss.xml',
+    feedUrl: 'https://www.thekitchn.com/main.rss',
   },
   {
     name: 'allrecipes',
     label: 'Allrecipes',
-    feedUrl: 'https://www.allrecipes.com/feeds/rss',
+    feedUrl: 'https://feeds-api.dotdashmeredith.com/v1/rss/google/afd5e9ea-c220-419e-9135-d8457772e240',
   },
   {
     name: 'epicurious',
@@ -60,6 +55,31 @@ export const FOOD_FEEDS: FeedSource[] = [
     name: 'minimalistbaker',
     label: 'Minimalist Baker',
     feedUrl: 'https://minimalistbaker.com/feed/',
+  },
+  {
+    name: 'simplyrecipes',
+    label: 'Simply Recipes',
+    feedUrl: 'https://feeds-api.dotdashmeredith.com/v1/rss/google/239d0eb0-7325-4400-8d4b-edad471df6c3',
+  },
+  {
+    name: 'budgetbytes',
+    label: 'Budget Bytes',
+    feedUrl: 'https://www.budgetbytes.com/feed/',
+  },
+  {
+    name: 'loveandlemons',
+    label: 'Love and Lemons',
+    feedUrl: 'https://www.loveandlemons.com/feed/',
+  },
+  {
+    name: 'nytfood',
+    label: 'NYT Food',
+    feedUrl: 'https://rss.nytimes.com/services/xml/rss/nyt/DiningandWine.xml',
+  },
+  {
+    name: 'foodnetwork',
+    label: 'Food Network',
+    feedUrl: 'https://news.google.com/rss/search?q=site:foodnetwork.com+recipes&hl=en-US&gl=US&ceid=US:en',
   },
 ];
 
@@ -100,14 +120,20 @@ export async function fetchFeed(feedSource: FeedSource): Promise<ArticleData[]> 
       excerpt = item.content.replace(/<[^>]*>/g, '').slice(0, 300);
     }
 
+    // Clean Google News title suffix (e.g., " - foodnetwork.com")
+    let title = item.title || 'Untitled';
+    if (feedSource.feedUrl.includes('news.google.com')) {
+      title = title.replace(/\s*-\s*[a-zA-Z0-9.-]+\.(com|org|net)$/i, '');
+    }
+
     return {
       url: item.link || '',
       source: feedSource.name,
-      title: item.title || 'Untitled',
+      title,
       author: item.creator || item.author || null,
       excerpt,
       imageUrl,
-      categories: item.categories || [],
+      categories: (item.categories || []).map((c: any) => typeof c === 'string' ? c : c._ || String(c)),
       publishedAt: item.isoDate ? new Date(item.isoDate) : new Date(),
     };
   }).filter((a: ArticleData) => a.url); // Filter out items without URLs
