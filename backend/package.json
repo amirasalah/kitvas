@@ -28,7 +28,9 @@
     "scheduler:run": "tsx src/cron/scheduler.ts run",
     "dashboard:youtube": "tsx src/scripts/fetch-youtube-trending.ts",
     "dashboard:rss": "tsx src/scripts/fetch-food-websites.ts",
-    "dashboard:aggregate": "tsx src/scripts/aggregate-trending-topics.ts"
+    "dashboard:aggregate": "tsx src/scripts/aggregate-trending-topics.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -56,6 +58,7 @@
     "eslint": "^8.56.0",
     "prisma": "^5.7.1",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
   }
 }
