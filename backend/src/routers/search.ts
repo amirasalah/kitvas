@@ -324,157 +324,150 @@ export const searchRouter = t.router({
         const freshYoutubeVideosRaw = (youtubeVideos || [])
           .filter(v => !dbYoutubeIds.has(v.id));
 
-        // 4. Extract ingredients INLINE for fresh YouTube videos and store in database
-        // This enables the correction system immediately for new videos
-        const freshAnalyzedVideos: typeof analyzedVideos = [];
+        // 4. Extract ingredients for fresh YouTube videos in PARALLEL and store in database
+        // Process up to 10 videos concurrently (5 at a time to respect Groq rate limits)
+        const INLINE_LIMIT = 10;
+        const CONCURRENCY = 5;
 
-        for (const ytVideo of freshYoutubeVideosRaw.slice(0, 20)) {
+        async function processOneVideo(ytVideo: YouTubeVideo) {
+          // Create video record in database
+          const dbVideo = await ctx.prisma.video.upsert({
+            where: { youtubeId: ytVideo.id },
+            update: {},
+            create: {
+              youtubeId: ytVideo.id,
+              title: ytVideo.snippet.title,
+              description: ytVideo.snippet.description || null,
+              thumbnailUrl: ytVideo.snippet.thumbnails.high?.url || ytVideo.snippet.thumbnails.medium?.url || ytVideo.snippet.thumbnails.default.url,
+              publishedAt: new Date(ytVideo.snippet.publishedAt),
+              views: ytVideo.statistics?.viewCount ? parseInt(ytVideo.statistics.viewCount, 10) : null,
+              viewsUpdatedAt: new Date(),
+              channelId: ytVideo.snippet.channelId || null,
+              extractedAt: new Date(),
+            },
+          });
+
+          // Fetch transcript (network call)
+          let transcript: string | null = null;
+          let extractionTranscript: string | null = null;
           try {
-            // Create video record in database
-            const dbVideo = await ctx.prisma.video.upsert({
-              where: { youtubeId: ytVideo.id },
-              update: {},
-              create: {
-                youtubeId: ytVideo.id,
-                title: ytVideo.snippet.title,
-                description: ytVideo.snippet.description || null,
-                thumbnailUrl: ytVideo.snippet.thumbnails.high?.url || ytVideo.snippet.thumbnails.medium?.url || ytVideo.snippet.thumbnails.default.url,
-                publishedAt: new Date(ytVideo.snippet.publishedAt),
-                views: ytVideo.statistics?.viewCount ? parseInt(ytVideo.statistics.viewCount, 10) : null,
-                viewsUpdatedAt: new Date(),
-                channelId: ytVideo.snippet.channelId || null,
-                extractedAt: new Date(),
-              },
-            });
-
-            // Try to fetch transcript for better ingredient detection
-            let transcript: string | null = null;
-            let extractionTranscript: string | null = null;
-            try {
-              transcript = await fetchTranscript(ytVideo.id);
-              if (transcript) {
-                logger.debug(`Fetched transcript for ${ytVideo.id}`, { chars: transcript.length });
-                // Detect language and translate if needed
-                const { translatedText, originalLanguage, wasTranslated } = await detectAndTranslate(transcript);
-                extractionTranscript = wasTranslated ? translatedText : transcript;
-                // Persist transcript + translation to database
-                await ctx.prisma.video.update({
-                  where: { id: dbVideo.id },
-                  data: {
-                    transcript,
-                    transcriptLanguage: originalLanguage,
-                    transcriptEnglish: wasTranslated ? translatedText : null,
-                  },
-                });
-              }
-            } catch {
-              // Transcript not available — continue without
+            transcript = await fetchTranscript(ytVideo.id);
+            if (transcript) {
+              logger.debug(`Fetched transcript for ${ytVideo.id}`, { chars: transcript.length });
+              const { translatedText, originalLanguage, wasTranslated } = await detectAndTranslate(transcript);
+              extractionTranscript = wasTranslated ? translatedText : transcript;
+              // Persist transcript + translation (fire-and-forget, don't block)
+              ctx.prisma.video.update({
+                where: { id: dbVideo.id },
+                data: {
+                  transcript,
+                  transcriptLanguage: originalLanguage,
+                  transcriptEnglish: wasTranslated ? translatedText : null,
+                },
+              }).catch(err => logger.error(`Failed to save transcript for ${ytVideo.id}`, { error: String(err) }));
             }
+          } catch {
+            // Transcript not available — continue without
+          }
 
-            // Extract ingredients using LLM/keywords (and English transcript if available)
-            const extractedIngredients = await extractIngredientsFromVideo(
+          // Run ingredient + tag extraction in PARALLEL (both are independent Groq calls)
+          const [extractedIngredients, extractedTags] = await Promise.all([
+            extractIngredientsFromVideo(
               ytVideo.snippet.title,
               ytVideo.snippet.description || null,
               extractionTranscript || transcript
-            );
+            ),
+            extractTagsFromVideo(
+              ytVideo.snippet.title,
+              ytVideo.snippet.description || null
+            ).catch(err => {
+              logger.warn(`Tag extraction failed for ${ytVideo.id}`, { error: err instanceof Error ? err.message : String(err) });
+              return [] as Awaited<ReturnType<typeof extractTagsFromVideo>>;
+            }),
+          ]);
 
-            // Store ingredients in database (enables corrections)
-            if (extractedIngredients.length > 0) {
-              await storeExtractedIngredients(ctx.prisma, dbVideo.id, extractedIngredients);
+          // Store ingredients + tags in parallel
+          await Promise.all([
+            extractedIngredients.length > 0
+              ? storeExtractedIngredients(ctx.prisma, dbVideo.id, extractedIngredients)
+              : Promise.resolve(),
+            extractedTags.length > 0
+              ? storeExtractedTags(ctx.prisma, dbVideo.id, extractedTags)
+              : Promise.resolve(),
+          ]);
+
+          // Build result directly from extracted data (no redundant DB refetch)
+          const freshTitleLower = ytVideo.snippet.title.toLowerCase();
+          const matchingIngs = extractedIngredients.filter(ing =>
+            normalizedIngredients.includes(ing.name.toLowerCase())
+          );
+          const extractedMatchedNames = new Set(matchingIngs.map(ing => ing.name.toLowerCase()));
+          const titleMatched: string[] = [];
+          for (const ing of normalizedIngredients) {
+            if (!extractedMatchedNames.has(ing) && titleContainsIngredient(freshTitleLower, ing)) {
+              titleMatched.push(ing);
             }
+          }
 
-            // Extract and store tags (cooking method, dietary, cuisine) - Week 5
-            try {
-              const extractedTags = await extractTagsFromVideo(
-                ytVideo.snippet.title,
-                ytVideo.snippet.description || null
-              );
-              if (extractedTags.length > 0) {
-                await storeExtractedTags(ctx.prisma, dbVideo.id, extractedTags);
+          const totalMatchCount = matchingIngs.length + titleMatched.length;
+          const relevanceScore = normalizedIngredients.length > 0
+            ? totalMatchCount / normalizedIngredients.length
+            : 0;
+
+          // Weighted score for ranking
+          let weightedScore = 0;
+          for (const ing of normalizedIngredients) {
+            const matched = extractedIngredients.find(e => e.name.toLowerCase() === ing);
+            if (matched) {
+              if (freshTitleLower.includes(ing)) {
+                weightedScore += 1.0;
+              } else if (matched.confidence >= 0.8) {
+                weightedScore += 0.85;
+              } else {
+                weightedScore += 0.65;
               }
-            } catch (tagError) {
-              logger.warn(`Tag extraction failed for ${ytVideo.id}`, { error: tagError instanceof Error ? tagError.message : String(tagError) });
+            } else if (titleMatched.includes(ing)) {
+              weightedScore += 0.90;
             }
+          }
+          const sortScore = weightedScore / normalizedIngredients.length;
 
-            // Calculate relevance score (ingredient matches + title matches)
-            const matchingIngredients = extractedIngredients.filter(ing =>
-              normalizedIngredients.includes(ing.name.toLowerCase())
-            );
-            const extractedMatchedNames = new Set(matchingIngredients.map(ing => ing.name.toLowerCase()));
+          return {
+            id: dbVideo.id,
+            youtubeId: dbVideo.youtubeId,
+            title: dbVideo.title,
+            description: dbVideo.description,
+            thumbnailUrl: dbVideo.thumbnailUrl,
+            publishedAt: dbVideo.publishedAt,
+            views: dbVideo.views,
+            relevanceScore,
+            sortScore,
+            ingredients: extractedIngredients.map(ing => ({
+              id: ing.name, // Use name as ID since we skip refetch
+              name: ing.name,
+              confidence: ing.confidence,
+              source: ing.source,
+            })),
+            tags: extractedTags.map(t => ({
+              tag: t.tag,
+              category: t.category,
+            })),
+          };
+        }
 
-            // Title matching for unmatched search terms (dish names like kofte)
-            const freshTitleLower = ytVideo.snippet.title.toLowerCase();
-            const freshTitleMatched: string[] = [];
-            for (const ing of normalizedIngredients) {
-              if (!extractedMatchedNames.has(ing) && titleContainsIngredient(freshTitleLower, ing)) {
-                freshTitleMatched.push(ing);
-              }
+        // Process videos in batches with concurrency limit
+        const inlineVideos = freshYoutubeVideosRaw.slice(0, INLINE_LIMIT);
+        const freshAnalyzedVideos: typeof analyzedVideos = [];
+
+        for (let i = 0; i < inlineVideos.length; i += CONCURRENCY) {
+          const batch = inlineVideos.slice(i, i + CONCURRENCY);
+          const results = await Promise.allSettled(batch.map(v => processOneVideo(v)));
+          for (const result of results) {
+            if (result.status === 'fulfilled') {
+              freshAnalyzedVideos.push(result.value);
+            } else {
+              logger.error('Failed to process fresh video', { error: String(result.reason) });
             }
-
-            const totalFreshMatchCount = matchingIngredients.length + freshTitleMatched.length;
-            const relevanceScore = normalizedIngredients.length > 0
-              ? totalFreshMatchCount / normalizedIngredients.length
-              : 0;
-
-            // Fetch the ingredient IDs and tags from database for correction system
-            const videoWithDetails = await ctx.prisma.video.findUnique({
-              where: { id: dbVideo.id },
-              include: {
-                videoIngredients: {
-                  include: { ingredient: true },
-                },
-                videoTags: true,
-              },
-            });
-
-            if (videoWithDetails) {
-              // Weighted score for ranking (same logic as DB results, with title matching)
-              const detailTitleLower = videoWithDetails.title.toLowerCase();
-              const freshIngMatchedNames = new Set(
-                videoWithDetails.videoIngredients.map(vi => vi.ingredient.name)
-              );
-              let freshWeightedScore = 0;
-              for (const ing of normalizedIngredients) {
-                const matchedVi = videoWithDetails.videoIngredients.find(vi => vi.ingredient.name === ing);
-                if (matchedVi) {
-                  if (detailTitleLower.includes(ing)) {
-                    freshWeightedScore += 1.0;
-                  } else if (matchedVi.confidence >= 0.8) {
-                    freshWeightedScore += 0.85;
-                  } else {
-                    freshWeightedScore += 0.65;
-                  }
-                } else if (!freshIngMatchedNames.has(ing) && titleContainsIngredient(detailTitleLower, ing)) {
-                  freshWeightedScore += 0.90;  // Title-only match (dish name not extracted)
-                }
-              }
-              const freshSortScore = freshWeightedScore / normalizedIngredients.length;
-
-              freshAnalyzedVideos.push({
-                id: videoWithDetails.id,
-                youtubeId: videoWithDetails.youtubeId,
-                title: videoWithDetails.title,
-                description: videoWithDetails.description,
-                thumbnailUrl: videoWithDetails.thumbnailUrl,
-                publishedAt: videoWithDetails.publishedAt,
-                views: videoWithDetails.views,
-                relevanceScore,
-                sortScore: freshSortScore,
-                ingredients: videoWithDetails.videoIngredients.map(vi => ({
-                  id: vi.ingredient.id,
-                  name: vi.ingredient.name,
-                  confidence: vi.confidence,
-                  source: vi.source,
-                })),
-                tags: videoWithDetails.videoTags.map(vt => ({
-                  tag: vt.tag,
-                  category: vt.category,
-                })),
-              });
-            }
-          } catch (error) {
-            logger.error(`Failed to process fresh video ${ytVideo.id}`, { error: error instanceof Error ? error.message : String(error) });
-            // Continue with other videos
           }
         }
 
@@ -501,7 +494,7 @@ export const searchRouter = t.router({
         const allAnalyzedVideos = mergedVideos.slice(0, 50).map(({ sortScore, ...video }) => video);
 
         // Process remaining fresh videos in background (fire-and-forget)
-        const remainingVideos = freshYoutubeVideosRaw.slice(20);
+        const remainingVideos = freshYoutubeVideosRaw.slice(INLINE_LIMIT);
         if (remainingVideos.length > 0) {
           processBackgroundVideos(ctx.prisma, remainingVideos).catch((err: unknown) =>
             logger.error('Background video processing error', { error: err instanceof Error ? err.message : String(err) })
