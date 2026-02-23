@@ -35,7 +35,20 @@ export function getPrisma(): PrismaClient {
   return instance;
 }
 
-// For short-lived scripts (cron jobs) that need their own client
+// For short-lived scripts (cron jobs) that need their own client.
+// Lower limit since scripts are sequential and don't need many connections.
+const SCRIPT_CONNECTION_LIMIT = 2;
+
 export function createScriptPrisma(): PrismaClient {
-  return createPrismaClient();
+  const url = process.env.DATABASE_URL || '';
+  const separator = url.includes('?') ? '&' : '?';
+  const urlWithLimit = url.includes('connection_limit')
+    ? url
+    : `${url}${separator}connection_limit=${SCRIPT_CONNECTION_LIMIT}`;
+
+  return new PrismaClient({
+    datasources: {
+      db: { url: urlWithLimit },
+    },
+  });
 }

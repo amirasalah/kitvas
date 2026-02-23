@@ -37,7 +37,7 @@ export const scheduledJobs: ScheduledJob[] = [
   {
     name: 'trends-hourly',
     description: 'Fetch Google Trends data for top ingredients',
-    schedule: '0 * * * *', // Every hour at :00
+    schedule: '5 * * * *', // Every hour at :05 (staggered to avoid pool exhaustion)
     script: 'src/scripts/fetch-google-trends.ts',
     enabled: true,
     timeout: 30 * 60 * 1000, // 30 minutes (rate-limited)
@@ -81,7 +81,7 @@ export const scheduledJobs: ScheduledJob[] = [
   {
     name: 'youtube-trending',
     description: 'Fetch trending food videos from YouTube',
-    schedule: '*/30 * * * *', // Every 30 minutes
+    schedule: '10,40 * * * *', // At :10 and :40 (staggered to avoid pool exhaustion)
     script: 'src/scripts/fetch-youtube-trending.ts',
     enabled: true,
     timeout: 15 * 60 * 1000, // 15 minutes
@@ -90,7 +90,7 @@ export const scheduledJobs: ScheduledJob[] = [
   {
     name: 'rss-food-websites',
     description: 'Fetch articles from food publication RSS feeds',
-    schedule: '0 * * * *', // Every hour
+    schedule: '20 * * * *', // Every hour at :20 (staggered to avoid pool exhaustion)
     script: 'src/scripts/fetch-food-websites.ts',
     enabled: true,
     timeout: 10 * 60 * 1000, // 10 minutes
@@ -129,6 +129,10 @@ export function describeSchedule(schedule: string): string {
 
   // Hourly jobs
   if (hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    if (minute.includes(',')) {
+      const times = minute.split(',').map(m => `:${m.trim().padStart(2, '0')}`).join(' and ');
+      return `Hourly at ${times} UTC`;
+    }
     return `Hourly at :${minute.padStart(2, '0')} UTC`;
   }
 
