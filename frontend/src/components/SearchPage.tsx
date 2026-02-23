@@ -7,6 +7,7 @@ import { trpc } from '@/app/providers'
 import { SearchInput } from './SearchInput'
 import { SearchResults } from './SearchResults'
 import { HeroFoodDecorations } from './FoodIllustrations'
+import { IngredientLoader } from './IngredientLoader'
 import { TrendingIngredients } from './TrendingIngredients'
 import { LoginGate } from './LoginGate'
 
@@ -194,10 +195,7 @@ export function SearchPage() {
       {hasSearched && (
       <section className="max-w-7xl mx-auto px-6 lg:px-8 py-8">
         {searchQuery.isLoading && (
-          <div className="flex flex-col items-center justify-center py-16">
-            <div className="w-12 h-12 rounded-full border-4 border-gray-200 border-t-[#10B981] animate-spin mb-4"></div>
-            <p className="text-gray-500 font-medium">Analyzing ingredients...</p>
-          </div>
+          <IngredientLoader ingredients={searchIngredients} />
         )}
 
         {searchQuery.error && (
