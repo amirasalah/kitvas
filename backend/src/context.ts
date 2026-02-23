@@ -4,8 +4,9 @@ import { hkdf } from 'node:crypto';
 import { promisify } from 'node:util';
 import type { Context as HonoContext } from 'hono';
 import { logger } from './lib/logger.js';
+import { getPrisma } from './lib/prisma.js';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 const hkdfAsync = promisify(hkdf);
 
 // Cache the derived encryption key

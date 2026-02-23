@@ -9,9 +9,9 @@
  *   npm run ingredients:fetch
  */
 
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 const WIKIDATA_ENDPOINT = 'https://query.wikidata.org/sparql';
 

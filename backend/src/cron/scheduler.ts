@@ -12,14 +12,14 @@ import cron from 'node-cron';
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { PrismaClient } from '@prisma/client';
 import { scheduledJobs, getEnabledJobs, describeSchedule, type ScheduledJob } from './config.js';
+import { getPrisma } from '../lib/prisma.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..', '..');
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 interface JobResult {
   success: boolean;

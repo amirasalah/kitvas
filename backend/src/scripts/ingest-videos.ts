@@ -28,7 +28,7 @@
  */
 
 import { config } from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 import { searchYouTubeVideos, getVideoDetails } from '../lib/youtube.js';
 import {
   generateIntelligentQueries,
@@ -49,7 +49,7 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 interface IngestionOptions {
   queries: string[];
@@ -209,7 +209,7 @@ async function ingestVideos(options: IngestionOptions) {
 }
 
 // Parse command line arguments
-async function parseArgs(prisma: PrismaClient): Promise<IngestionOptions> {
+async function parseArgs(prisma: ReturnType<typeof createScriptPrisma>): Promise<IngestionOptions> {
   const args = process.argv.slice(2);
   
   let queries: string[] = [];

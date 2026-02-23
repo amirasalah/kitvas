@@ -12,12 +12,12 @@
  *   npm run import:recipes -- --source all
  */
 
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 import { config } from 'dotenv';
 
 config();
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 // ============================================
 // TheMealDB API (Free, no key needed)

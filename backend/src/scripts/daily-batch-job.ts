@@ -22,7 +22,7 @@
  */
 
 import { config } from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 import { searchYouTubeVideos, getVideoDetails } from '../lib/youtube.js';
 import {
   generateIntelligentQueries,
@@ -45,7 +45,7 @@ if (!process.env.YOUTUBE_API_KEY) {
   process.exit(1);
 }
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 interface BatchJobStats {
   startTime: Date;

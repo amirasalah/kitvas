@@ -17,10 +17,10 @@
 import { config } from 'dotenv';
 config();
 
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 import { getVideoDetails } from '../lib/youtube.js';
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 interface RefreshStats {
   videosChecked: number;

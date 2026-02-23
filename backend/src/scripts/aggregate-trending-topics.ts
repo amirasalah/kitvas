@@ -11,12 +11,12 @@
  * Schedule: Every 15 minutes
  */
 
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 import { config } from 'dotenv';
 
 config({ path: '.env' });
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 const PERIODS = ['1h', '24h', '7d', '30d'] as const;
 

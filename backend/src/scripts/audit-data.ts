@@ -7,9 +7,9 @@
  *   npx tsx src/scripts/audit-data.ts
  */
 
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 async function main(): Promise<void> {
   console.log('=== Kitvas Data Audit ===\n');

@@ -12,11 +12,11 @@
  *   npx tsx src/scripts/backfill-translations.ts status           # Show current state
  */
 
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 import { translateToEnglish } from '../lib/translator.js';
 import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/ingredient-extractor.js';
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 const args = process.argv.slice(2);
 const command = args[0] || 'status';

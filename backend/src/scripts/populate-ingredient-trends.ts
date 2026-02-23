@@ -9,9 +9,9 @@
  *   npx tsx src/scripts/populate-ingredient-trends.ts --days=90
  */
 
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 interface TrendData {
   ingredientId: string;

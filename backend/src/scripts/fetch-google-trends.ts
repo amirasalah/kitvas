@@ -12,13 +12,13 @@
  */
 
 import { config } from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 import { GoogleTrendsFetcher } from '../lib/google-trends/index.js';
 import { sendBreakoutAlert } from '../lib/email/resend.js';
 
 config();
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 interface JobStats {
   startTime: Date;

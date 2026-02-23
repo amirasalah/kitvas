@@ -13,13 +13,13 @@
  */
 
 import { config } from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 import { fetchTranscript } from '../lib/transcript-fetcher.js';
 import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/ingredient-extractor.js';
 
 config();
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 async function backfillTranscripts(limit: number = 500) {
   console.log('═══════════════════════════════════════════════════════════');

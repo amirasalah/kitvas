@@ -8,8 +8,8 @@ import { createContext } from './context.js';
 import { startExtractionWorker } from './lib/extraction-queue.js';
 import { broadcaster } from './lib/sse-broadcast.js';
 import { queryHotIngredients } from './lib/hot-ingredients-query.js';
-import { PrismaClient } from '@prisma/client';
 import { logger } from './lib/logger.js';
+import { getPrisma } from './lib/prisma.js';
 
 // Validate required environment variables at startup
 const requiredEnvVars = ['DATABASE_URL', 'AUTH_SECRET'] as const;
@@ -26,8 +26,8 @@ for (const v of optionalEnvVars) {
   }
 }
 
-// Initialize Prisma for extraction worker
-const prisma = new PrismaClient();
+// Shared Prisma singleton (connection-pool-limited)
+const prisma = getPrisma();
 
 const app = new Hono();
 

@@ -10,9 +10,9 @@
  *   npx tsx src/scripts/aggregate-trends.ts --backfill=30
  */
 
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 interface AggregationResult {
   ingredientId: string;

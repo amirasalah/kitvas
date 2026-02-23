@@ -6,14 +6,14 @@
  * Schedule: Every 6 hours
  */
 
-import { PrismaClient } from '@prisma/client';
 import { config } from 'dotenv';
 import { fetchAllFeeds } from '../lib/rss-fetcher.js';
 import { extractIngredientsWithKeywords } from '../lib/ingredient-extractor.js';
+import { createScriptPrisma } from '../lib/prisma.js';
 
 config({ path: '.env' });
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 async function fetchFoodWebsites() {
   console.log('[RSS] Starting food website RSS fetch...');

@@ -9,14 +9,14 @@
  * Schedule: Every 2 hours
  */
 
-import { PrismaClient } from '@prisma/client';
+import { createScriptPrisma } from '../lib/prisma.js';
 import { config } from 'dotenv';
 import { searchYouTubeVideos, getVideoDetails } from '../lib/youtube.js';
 import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/ingredient-extractor.js';
 
 config({ path: '.env' });
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrisma();
 
 const TRENDING_QUERIES = [
   'trending recipe this week',
