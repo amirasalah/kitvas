@@ -5,10 +5,7 @@ import { getCachedSearch, setCachedSearch, getCacheKey } from '../lib/search-cac
 import { checkRateLimit, incrementRateLimit, getRemainingSearches } from '../lib/rate-limiter.js';
 import { searchYouTubeVideos, getVideoDetails, type YouTubeVideo } from '../lib/youtube.js';
 import { calculateYouTubeDemandSignal } from '../lib/youtube-demand-calculator.js';
-import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/ingredient-extractor.js';
-import { extractTagsFromVideo, storeExtractedTags } from '../lib/tag-extractor.js';
 import { processBackgroundVideos } from '../lib/background-processor.js';
-import { fetchTranscript } from '../lib/transcript-fetcher.js';
 import { detectAndTranslate } from '../lib/translator.js';
 import { getTrendsBoost } from '../lib/google-trends/fetcher.js';
 import { normalizeIngredient, getSynonymMatches, getSynonyms } from '../lib/ingredient-synonyms.js';
@@ -206,25 +203,42 @@ export const searchRouter = t.router({
           };
         }
 
-        const videos = await ctx.prisma.video.findMany({
+        // Run DB query and YouTube API call in PARALLEL (independent operations)
+        const dbQueryPromise = ctx.prisma.video.findMany({
           where: videoWhere,
           include: {
             videoIngredients: {
-              where: { confidence: { gte: 0.5 } }, // Only include high-confidence ingredients
+              where: { confidence: { gte: 0.5 } },
               include: {
                 ingredient: true,
               },
             },
             videoTags: true,
           },
-          take: 200, // Fetch larger pool for better relevance filtering
+          take: 200,
           orderBy: {
-            views: 'desc', // Prioritize videos with view data over recency
+            views: 'desc',
           },
         });
 
+        // Check YouTube cache and call API if needed (runs in parallel with DB query)
+        let rateLimitRemaining = getRemainingSearches(ctx.userId || null, ctx.clientIp);
+        const youtubePromise = (async () => {
+          let cached = getCachedSearch(normalizedIngredients);
+          if (!cached && checkRateLimit(ctx.userId || null, ctx.clientIp)) {
+            cached = await searchYouTubeLive(normalizedIngredients);
+            if (cached.length > 0) {
+              setCachedSearch(normalizedIngredients, cached);
+              incrementRateLimit(ctx.userId || null, ctx.clientIp);
+              rateLimitRemaining = getRemainingSearches(ctx.userId || null, ctx.clientIp);
+            }
+          }
+          return cached;
+        })();
+
+        const [videos, youtubeVideos] = await Promise.all([dbQueryPromise, youtubePromise]);
+
         // Calculate relevance scores for database results
-        // Binary match ratio for filtering/display + weighted score for ranking
         const analyzedVideosUnfiltered = videos.map((video) => {
           const titleLower = video.title.toLowerCase();
 
@@ -304,205 +318,24 @@ export const searchRouter = t.router({
             return b.sortScore - a.sortScore;
           });
 
-        // 2. Check cache for YouTube results
-        let youtubeVideos = getCachedSearch(normalizedIngredients);
-        let rateLimitRemaining = getRemainingSearches(ctx.userId || null, ctx.clientIp);
-
-        // 3. If no cache and within rate limit, call YouTube API
-        if (!youtubeVideos && checkRateLimit(ctx.userId || null, ctx.clientIp)) {
-          youtubeVideos = await searchYouTubeLive(normalizedIngredients);
-
-          if (youtubeVideos.length > 0) {
-            setCachedSearch(normalizedIngredients, youtubeVideos);
-            incrementRateLimit(ctx.userId || null, ctx.clientIp);
-            rateLimitRemaining = getRemainingSearches(ctx.userId || null, ctx.clientIp);
-          }
-        }
-
         // Filter YouTube results to exclude videos already in database
         const dbYoutubeIds = new Set(videos.map(v => v.youtubeId));
         const freshYoutubeVideosRaw = (youtubeVideos || [])
           .filter(v => !dbYoutubeIds.has(v.id));
 
-        // 4. Extract ingredients for fresh YouTube videos in PARALLEL and store in database
-        // Process up to 10 videos concurrently (5 at a time to respect Groq rate limits)
-        const INLINE_LIMIT = 10;
-        const CONCURRENCY = 5;
-
-        async function processOneVideo(ytVideo: YouTubeVideo) {
-          // Create video record in database
-          const dbVideo = await ctx.prisma.video.upsert({
-            where: { youtubeId: ytVideo.id },
-            update: {},
-            create: {
-              youtubeId: ytVideo.id,
-              title: ytVideo.snippet.title,
-              description: ytVideo.snippet.description || null,
-              thumbnailUrl: ytVideo.snippet.thumbnails.high?.url || ytVideo.snippet.thumbnails.medium?.url || ytVideo.snippet.thumbnails.default.url,
-              publishedAt: new Date(ytVideo.snippet.publishedAt),
-              views: ytVideo.statistics?.viewCount ? parseInt(ytVideo.statistics.viewCount, 10) : null,
-              viewsUpdatedAt: new Date(),
-              channelId: ytVideo.snippet.channelId || null,
-              extractedAt: new Date(),
-            },
-          });
-
-          // Fetch transcript (network call)
-          let transcript: string | null = null;
-          let extractionTranscript: string | null = null;
-          try {
-            transcript = await fetchTranscript(ytVideo.id);
-            if (transcript) {
-              logger.debug(`Fetched transcript for ${ytVideo.id}`, { chars: transcript.length });
-              const { translatedText, originalLanguage, wasTranslated } = await detectAndTranslate(transcript);
-              extractionTranscript = wasTranslated ? translatedText : transcript;
-              // Persist transcript + translation (fire-and-forget, don't block)
-              ctx.prisma.video.update({
-                where: { id: dbVideo.id },
-                data: {
-                  transcript,
-                  transcriptLanguage: originalLanguage,
-                  transcriptEnglish: wasTranslated ? translatedText : null,
-                },
-              }).catch(err => logger.error(`Failed to save transcript for ${ytVideo.id}`, { error: String(err) }));
-            }
-          } catch {
-            // Transcript not available — continue without
-          }
-
-          // Run ingredient + tag extraction in PARALLEL (both are independent Groq calls)
-          const [extractedIngredients, extractedTags] = await Promise.all([
-            extractIngredientsFromVideo(
-              ytVideo.snippet.title,
-              ytVideo.snippet.description || null,
-              extractionTranscript || transcript
-            ),
-            extractTagsFromVideo(
-              ytVideo.snippet.title,
-              ytVideo.snippet.description || null
-            ).catch(err => {
-              logger.warn(`Tag extraction failed for ${ytVideo.id}`, { error: err instanceof Error ? err.message : String(err) });
-              return [] as Awaited<ReturnType<typeof extractTagsFromVideo>>;
-            }),
-          ]);
-
-          // Store ingredients + tags in parallel
-          await Promise.all([
-            extractedIngredients.length > 0
-              ? storeExtractedIngredients(ctx.prisma, dbVideo.id, extractedIngredients)
-              : Promise.resolve(),
-            extractedTags.length > 0
-              ? storeExtractedTags(ctx.prisma, dbVideo.id, extractedTags)
-              : Promise.resolve(),
-          ]);
-
-          // Build result directly from extracted data (no redundant DB refetch)
-          const freshTitleLower = ytVideo.snippet.title.toLowerCase();
-          const matchingIngs = extractedIngredients.filter(ing =>
-            normalizedIngredients.includes(ing.name.toLowerCase())
-          );
-          const extractedMatchedNames = new Set(matchingIngs.map(ing => ing.name.toLowerCase()));
-          const titleMatched: string[] = [];
-          for (const ing of normalizedIngredients) {
-            if (!extractedMatchedNames.has(ing) && titleContainsIngredient(freshTitleLower, ing)) {
-              titleMatched.push(ing);
-            }
-          }
-
-          const totalMatchCount = matchingIngs.length + titleMatched.length;
-          const relevanceScore = normalizedIngredients.length > 0
-            ? totalMatchCount / normalizedIngredients.length
-            : 0;
-
-          // Weighted score for ranking
-          let weightedScore = 0;
-          for (const ing of normalizedIngredients) {
-            const matched = extractedIngredients.find(e => e.name.toLowerCase() === ing);
-            if (matched) {
-              if (freshTitleLower.includes(ing)) {
-                weightedScore += 1.0;
-              } else if (matched.confidence >= 0.8) {
-                weightedScore += 0.85;
-              } else {
-                weightedScore += 0.65;
-              }
-            } else if (titleMatched.includes(ing)) {
-              weightedScore += 0.90;
-            }
-          }
-          const sortScore = weightedScore / normalizedIngredients.length;
-
-          return {
-            id: dbVideo.id,
-            youtubeId: dbVideo.youtubeId,
-            title: dbVideo.title,
-            description: dbVideo.description,
-            thumbnailUrl: dbVideo.thumbnailUrl,
-            publishedAt: dbVideo.publishedAt,
-            views: dbVideo.views,
-            relevanceScore,
-            sortScore,
-            ingredients: extractedIngredients.map(ing => ({
-              id: ing.name, // Use name as ID since we skip refetch
-              name: ing.name,
-              confidence: ing.confidence,
-              source: ing.source,
-            })),
-            tags: extractedTags.map(t => ({
-              tag: t.tag,
-              category: t.category,
-            })),
-          };
-        }
-
-        // Process videos in batches with concurrency limit
-        const inlineVideos = freshYoutubeVideosRaw.slice(0, INLINE_LIMIT);
-        const freshAnalyzedVideos: typeof analyzedVideos = [];
-
-        for (let i = 0; i < inlineVideos.length; i += CONCURRENCY) {
-          const batch = inlineVideos.slice(i, i + CONCURRENCY);
-          const results = await Promise.allSettled(batch.map(v => processOneVideo(v)));
-          for (const result of results) {
-            if (result.status === 'fulfilled') {
-              freshAnalyzedVideos.push(result.value);
-            } else {
-              logger.error('Failed to process fresh video', { error: String(result.reason) });
-            }
-          }
-        }
-
-        // Filter fresh videos: minimum 50% match
-        let filteredFreshVideos = freshAnalyzedVideos.filter(
-          video => video.relevanceScore >= 0.5
-        );
-
-        if (normalizedTags.length > 0) {
-          filteredFreshVideos = filteredFreshVideos.filter(video =>
-            video.tags.some(t => normalizedTags.includes(t.tag))
-          );
-        }
-
-        // Merge fresh analyzed videos with existing, sort by relevance then views, cap at 50
-        const mergedVideos = [...filteredFreshVideos, ...analyzedVideos];
-        mergedVideos.sort((a, b) => {
-          if (a.relevanceScore !== b.relevanceScore) return b.relevanceScore - a.relevanceScore;
-          const aHasViews = a.views != null && a.views > 0 ? 1 : 0;
-          const bHasViews = b.views != null && b.views > 0 ? 1 : 0;
-          if (aHasViews !== bHasViews) return bHasViews - aHasViews;
-          return b.sortScore - a.sortScore;
-        });
-        const allAnalyzedVideos = mergedVideos.slice(0, 50).map(({ sortScore, ...video }) => video);
-
-        // Process remaining fresh videos in background (fire-and-forget)
-        const remainingVideos = freshYoutubeVideosRaw.slice(INLINE_LIMIT);
-        if (remainingVideos.length > 0) {
-          processBackgroundVideos(ctx.prisma, remainingVideos).catch((err: unknown) =>
+        // 4. ALL fresh YouTube videos go to background extraction (fire-and-forget)
+        // This eliminates 15-25s of inline Groq API calls from the response path
+        if (freshYoutubeVideosRaw.length > 0) {
+          processBackgroundVideos(ctx.prisma, freshYoutubeVideosRaw).catch((err: unknown) =>
             logger.error('Background video processing error', { error: err instanceof Error ? err.message : String(err) })
           );
         }
 
+        // Cap analyzed DB results at 50
+        const allAnalyzedVideos = analyzedVideos.slice(0, 50).map(({ sortScore, ...video }) => video);
+
         // Build unanalyzed YouTube video list for "Fresh from YouTube" section
-        const unanalyzedYoutubeVideos = remainingVideos.map(ytVideo => ({
+        const unanalyzedYoutubeVideos = freshYoutubeVideosRaw.map(ytVideo => ({
           youtubeId: ytVideo.id,
           title: ytVideo.snippet.title,
           description: ytVideo.snippet.description || null,
@@ -511,77 +344,78 @@ export const searchRouter = t.router({
           views: ytVideo.statistics?.viewCount ? parseInt(ytVideo.statistics.viewCount, 10) : null,
         }));
 
-        // Fetch Google Trends boost for enhanced demand scoring
-        const trendsBoost = await getTrendsBoost(ctx.prisma, normalizedIngredients);
-
-        // Calculate demand signals from YouTube data (zero extra API calls)
-        // Pass ingredients to filter videos by relevance, with optional Google Trends boost
-        const demandSignal = calculateYouTubeDemandSignal(youtubeVideos || [], normalizedIngredients, trendsBoost || undefined);
+        // Calculate demand signals from YouTube data (zero extra API calls, uses in-memory data)
+        const demandSignal = calculateYouTubeDemandSignal(youtubeVideos || [], normalizedIngredients);
         const hadYouTubeHit = youtubeVideos !== null && youtubeVideos.length > 0;
 
-        // Persist demand signal to database for caching and historical tracking
+        // Fire-and-forget: persist demand signal + search log + trends boost asynchronously
+        // None of these block the response
         if (hadYouTubeHit && demandSignal.sampleSize > 0) {
           const ingredientKey = getCacheKey(normalizedIngredients);
-          try {
-            await ctx.prisma.demandSignal.upsert({
-              where: { ingredientKey },
-              update: {
-                demandScore: demandSignal.demandScore,
-                demandBand: demandSignal.demandBand,
-                avgViews: demandSignal.marketMetrics.avgViews,
-                medianViews: demandSignal.marketMetrics.medianViews,
-                avgViewsPerDay: demandSignal.marketMetrics.avgViewsPerDay,
-                videoCount: demandSignal.marketMetrics.videoCount,
-                contentGapScore: demandSignal.contentGap.score,
-                contentGapType: demandSignal.contentGap.type,
-                confidence: demandSignal.confidence,
-                sampleSize: demandSignal.sampleSize,
-                calculatedAt: new Date(),
-                // Google Trends data
-                googleTrendsScore: demandSignal.trendsBoost?.interestScore ?? null,
-                googleTrendsGrowth: demandSignal.trendsBoost?.weekOverWeekGrowth ?? null,
-                googleTrendsBreakout: demandSignal.trendsBoost?.isBreakout ?? false,
-                googleTrendsFetchedAt: demandSignal.trendsBoost ? new Date() : null,
-              },
-              create: {
-                ingredientKey,
-                ingredients: normalizedIngredients,
-                demandScore: demandSignal.demandScore,
-                demandBand: demandSignal.demandBand,
-                avgViews: demandSignal.marketMetrics.avgViews,
-                medianViews: demandSignal.marketMetrics.medianViews,
-                avgViewsPerDay: demandSignal.marketMetrics.avgViewsPerDay,
-                videoCount: demandSignal.marketMetrics.videoCount,
-                contentGapScore: demandSignal.contentGap.score,
-                contentGapType: demandSignal.contentGap.type,
-                confidence: demandSignal.confidence,
-                sampleSize: demandSignal.sampleSize,
-                // Google Trends data
-                googleTrendsScore: demandSignal.trendsBoost?.interestScore ?? null,
-                googleTrendsGrowth: demandSignal.trendsBoost?.weekOverWeekGrowth ?? null,
-                googleTrendsBreakout: demandSignal.trendsBoost?.isBreakout ?? false,
-                googleTrendsFetchedAt: demandSignal.trendsBoost ? new Date() : null,
-              },
-            });
-          } catch (error) {
-            logger.error('Failed to persist demand signal', { error: error instanceof Error ? error.message : String(error) });
-          }
+          (async () => {
+            try {
+              // Fetch trends boost asynchronously (only uses cached data if available)
+              const trendsBoost = await getTrendsBoost(ctx.prisma, normalizedIngredients);
+              // Recalculate demand with trends boost if available
+              const enrichedSignal = trendsBoost
+                ? calculateYouTubeDemandSignal(youtubeVideos || [], normalizedIngredients, trendsBoost)
+                : demandSignal;
+              await ctx.prisma.demandSignal.upsert({
+                where: { ingredientKey },
+                update: {
+                  demandScore: enrichedSignal.demandScore,
+                  demandBand: enrichedSignal.demandBand,
+                  avgViews: enrichedSignal.marketMetrics.avgViews,
+                  medianViews: enrichedSignal.marketMetrics.medianViews,
+                  avgViewsPerDay: enrichedSignal.marketMetrics.avgViewsPerDay,
+                  videoCount: enrichedSignal.marketMetrics.videoCount,
+                  contentGapScore: enrichedSignal.contentGap.score,
+                  contentGapType: enrichedSignal.contentGap.type,
+                  confidence: enrichedSignal.confidence,
+                  sampleSize: enrichedSignal.sampleSize,
+                  calculatedAt: new Date(),
+                  googleTrendsScore: enrichedSignal.trendsBoost?.interestScore ?? null,
+                  googleTrendsGrowth: enrichedSignal.trendsBoost?.weekOverWeekGrowth ?? null,
+                  googleTrendsBreakout: enrichedSignal.trendsBoost?.isBreakout ?? false,
+                  googleTrendsFetchedAt: enrichedSignal.trendsBoost ? new Date() : null,
+                },
+                create: {
+                  ingredientKey,
+                  ingredients: normalizedIngredients,
+                  demandScore: enrichedSignal.demandScore,
+                  demandBand: enrichedSignal.demandBand,
+                  avgViews: enrichedSignal.marketMetrics.avgViews,
+                  medianViews: enrichedSignal.marketMetrics.medianViews,
+                  avgViewsPerDay: enrichedSignal.marketMetrics.avgViewsPerDay,
+                  videoCount: enrichedSignal.marketMetrics.videoCount,
+                  contentGapScore: enrichedSignal.contentGap.score,
+                  contentGapType: enrichedSignal.contentGap.type,
+                  confidence: enrichedSignal.confidence,
+                  sampleSize: enrichedSignal.sampleSize,
+                  googleTrendsScore: enrichedSignal.trendsBoost?.interestScore ?? null,
+                  googleTrendsGrowth: enrichedSignal.trendsBoost?.weekOverWeekGrowth ?? null,
+                  googleTrendsBreakout: enrichedSignal.trendsBoost?.isBreakout ?? false,
+                  googleTrendsFetchedAt: enrichedSignal.trendsBoost ? new Date() : null,
+                },
+              });
+            } catch (error) {
+              logger.error('Failed to persist demand signal', { error: error instanceof Error ? error.message : String(error) });
+            }
+          })();
         }
 
-        // Log search pattern (moat contribution)
-        try {
-          await ctx.prisma.search.create({
-            data: {
-              ingredients: normalizedIngredients,
-              userId: ctx.userId || null,
-              resultCount: allAnalyzedVideos.length,
-              hadYouTubeHit,
-              demandBand: demandSignal.demandBand,
-            },
-          });
-        } catch (error) {
+        // Fire-and-forget: log search pattern
+        ctx.prisma.search.create({
+          data: {
+            ingredients: normalizedIngredients,
+            userId: ctx.userId || null,
+            resultCount: allAnalyzedVideos.length,
+            hadYouTubeHit,
+            demandBand: demandSignal.demandBand,
+          },
+        }).catch(error => {
           logger.error('Failed to log search', { error: error instanceof Error ? error.message : String(error) });
-        }
+        });
 
         return {
           // All analyzed videos (database + freshly extracted from YouTube)

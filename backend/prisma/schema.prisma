@@ -87,7 +87,8 @@ model Video {
   @@index([youtubeId])
   @@index([publishedAt])
   @@index([viewsUpdatedAt])
-  // Full-text search index will be added via SQL migration
+  @@index([views])
+  // Trigram GIN index on title added via SQL migration (pg_trgm)
 }
 
 model VideoTag {
@@ -144,6 +145,7 @@ model VideoIngredient {
   @@id([videoId, ingredientId])
   @@index([ingredientId, videoId])
   @@index([videoId])
+  @@index([videoId, confidence])
 }
 
 model Search {
