@@ -37,6 +37,13 @@ export interface YouTubeVideo {
   };
 }
 
+export class YouTubeQuotaError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'YouTubeQuotaError';
+  }
+}
+
 export async function searchYouTubeVideos(
   query: string,
   apiKey: string,
@@ -50,10 +57,14 @@ export async function searchYouTubeVideos(
   url.searchParams.set('key', apiKey);
 
   const response = await fetch(url.toString());
-  
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(`YouTube API error: ${response.statusText} - ${JSON.stringify(errorData)}`);
+    const errorStr = JSON.stringify(errorData);
+    if (response.status === 403 && errorStr.includes('quotaExceeded')) {
+      throw new YouTubeQuotaError('YouTube API daily quota exceeded');
+    }
+    throw new Error(`YouTube API error: ${response.statusText} - ${errorStr}`);
   }
 
   const data = await response.json() as { items: YouTubeSearchResult[] };

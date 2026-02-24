@@ -6,12 +6,12 @@
  * - Top trending ingredients from Google Trends data
  *
  * Stores videos in the existing Video model with extracted ingredients.
- * Schedule: Every 2 hours
+ * Schedule: Every 4 hours
  */
 
 import { createScriptPrisma } from '../lib/prisma.js';
 import { config } from 'dotenv';
-import { searchYouTubeVideos, getVideoDetails } from '../lib/youtube.js';
+import { searchYouTubeVideos, getVideoDetails, YouTubeQuotaError } from '../lib/youtube.js';
 import { extractIngredientsFromVideo, storeExtractedIngredients } from '../lib/ingredient-extractor.js';
 
 config({ path: '.env' });
@@ -22,8 +22,6 @@ const TRENDING_QUERIES = [
   'trending recipe this week',
   'viral food recipe',
   'food trend 2026',
-  'popular recipe right now',
-  'best new recipe',
 ];
 
 async function fetchYouTubeTrending() {
@@ -46,7 +44,7 @@ async function fetchYouTubeTrending() {
     },
     distinct: ['keyword'],
     orderBy: { interestValue: 'desc' },
-    take: 15,
+    take: 5,
     select: { keyword: true },
   });
 
@@ -112,6 +110,10 @@ async function fetchYouTubeTrending() {
       // Small delay between queries
       await new Promise(r => setTimeout(r, 500));
     } catch (error) {
+      if (error instanceof YouTubeQuotaError) {
+        console.warn(`[YT-Trending] YouTube API quota exceeded — stopping early.`);
+        break;
+      }
       console.error(`[YT-Trending] Query "${query}" failed:`, error);
     }
   }

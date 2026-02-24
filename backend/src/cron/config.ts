@@ -81,7 +81,7 @@ export const scheduledJobs: ScheduledJob[] = [
   {
     name: 'youtube-trending',
     description: 'Fetch trending food videos from YouTube',
-    schedule: '10,40 * * * *', // At :10 and :40 (staggered to avoid pool exhaustion)
+    schedule: '10 */4 * * *', // Every 4 hours at :10 (quota: ~800 units/run, ~4800/day)
     script: 'src/scripts/fetch-youtube-trending.ts',
     enabled: true,
     timeout: 15 * 60 * 1000, // 15 minutes
